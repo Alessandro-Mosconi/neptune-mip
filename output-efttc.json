@@ -1,0 +1,30 @@
+{
+    "cpu_allocations": {
+        "ns/fn_1": {
+            "node_a": true
+        },
+        "ns/fn_2": {
+            "node_b": true
+        }
+    },
+    "cpu_routing_rules": {
+        "node_a": {
+            "ns/fn_1": {
+                "node_a": 1.0
+            },
+            "ns/fn_2": {}
+        },
+        "node_b": {
+            "ns/fn_1": {},
+            "ns/fn_2": {
+                "node_b": 1.0
+            }
+        },
+        "node_c": {
+            "ns/fn_1": {},
+            "ns/fn_2": {}
+        }
+    },
+    "gpu_allocations": {},
+    "gpu_routing_rules": {}
+}

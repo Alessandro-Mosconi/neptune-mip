@@ -1,15 +1,19 @@
 import pprint
+import json
 
 import requests
 
 for solver_type in [
+    "NeptuneWithEFTTCMinDelay",
+    "NeptuneWithEFTTCMinUtilization",
+    "NeptuneWithEFTTCMinDelayAndUtilization",
     "NeptuneMinDelayAndUtilization",
-    # "NeptuneMinDelay",
-    # "NeptuneMinUtilization",
-    # "VSVBP",
-    # "Criticality",
-    # "CriticalityHeuristic",
-    # "MCF"
+    "NeptuneMinDelay",
+    #"NeptuneMinUtilization",
+    #"VSVBP",
+    #"Criticality",
+    #"CriticalityHeuristic",
+    #"MCF"
 ]:
     # solver_type = "NeptuneMinDelayAndUtilization"
 
@@ -62,6 +66,7 @@ for solver_type in [
                 "type": solver_type,
                 "args": {"alpha": 0.0, "verbose": False}
             },
+            "with_db": False,
             "community": "community-test",
             "namespace": "namespace-test",
             "node_names": [
@@ -102,6 +107,7 @@ for solver_type in [
                 "type": solver_type,
                 "args": {"alpha": 0.0, "verbose": False}
             },
+            "with_db": False,
             "community": "community-test",
             "namespace": "namespace-test",
             "node_names": [
@@ -139,6 +145,7 @@ for solver_type in [
                 "type": solver_type,
                 "args": {"alpha": 0.0, "verbose": False}
             },
+            "with_db": False,
             "community": "community-test",
             "namespace": "namespace-test",
             "node_names": [
@@ -179,6 +186,7 @@ for solver_type in [
                 "type": solver_type,
                 "args": {"alpha": 0.0, "verbose": False}
             },
+            "with_db": False,
             "community": "community-test",
             "namespace": "namespace-test",
             "node_names": [
@@ -221,6 +229,7 @@ for solver_type in [
                 "type": solver_type,
                 "args": {"alpha": 0.0, "verbose": False}
             },
+            "with_db": False,
             "community": "community-test",
             "namespace": "namespace-test",
             "node_names": [f"node_{i}" for i in range(20)],
@@ -245,6 +254,7 @@ for solver_type in [
                 "type": solver_type,
                 "args": {"alpha": 0.0, "verbose": False}
             },
+            "with_db": False,
             "community": "community-test",
             "namespace": "namespace-test",
             "node_names": [f"node_{i}" for i in range(20)],
@@ -279,6 +289,25 @@ for solver_type in [
         },
     ]
 
-    for input_request in inputs:
+    for i, input_request in enumerate(inputs):
         response = requests.request(method='get', url="http://localhost:5000/", json=input_request)
-        pprint.pprint(response.json())
+
+        print("=" * 40)
+        print(f"Solver: {solver_type}")
+        print("Status:", response.status_code)
+
+        output_file = f"allocation_algorithm_test/output_{solver_type}_case{i}.json"
+
+        try:
+            response_json = response.json()
+            pprint.pprint(response_json)
+            with open(output_file, 'w') as f:
+                json.dump(response_json, f, indent=4)
+            print(f"✓ Risposta JSON salvata in {output_file}")
+        except Exception as e:
+            print("❌ Errore nel parsing JSON:", e)
+            print("Contenuto grezzo della risposta:")
+            print(response.text)
+            with open(output_file, 'w') as f:
+                f.write(response.text)
+            print(f"⚠️ Risposta grezza salvata in {output_file}")

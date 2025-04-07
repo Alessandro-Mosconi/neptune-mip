@@ -38,6 +38,8 @@ def serve():
     solver_args = solver.get("args", {})
     with_db = input.get("with_db", True)
 
+    print("WithDB: " + str(with_db))
+
     solver = eval(solver_type)(**solver_args)
     print(solver)
     solver.load_data(data_to_solver_input(input, with_db=with_db, workload_coeff=input.get("workload_coeff", 1))) 
