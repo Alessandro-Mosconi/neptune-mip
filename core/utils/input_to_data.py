@@ -25,6 +25,9 @@ keys = [
 ]
 
 solvers = [
+    "EFTTCMinDelay",
+    "EFTTCMinUtilization",
+    "EFTTCMinDelayAndUtilization",
     "NeptuneWithEFTTCMinDelay",
     "NeptuneWithEFTTCMinUtilization",
     "NeptuneWithEFTTCMinDelayAndUtilization",

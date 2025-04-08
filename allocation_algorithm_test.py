@@ -4,6 +4,9 @@ import json
 import requests
 
 for solver_type in [
+    "EFTTCMinDelay",
+    "EFTTCMinUtilization",
+    "EFTTCMinDelayAndUtilization",
     "NeptuneWithEFTTCMinDelay",
     "NeptuneWithEFTTCMinUtilization",
     "NeptuneWithEFTTCMinDelayAndUtilization",

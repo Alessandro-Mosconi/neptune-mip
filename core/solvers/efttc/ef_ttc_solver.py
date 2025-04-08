@@ -1,8 +1,8 @@
 # File: ef_ttc_solver.py
 
 import numpy as np
-from .utils import init_x, init_c
-from ..solver import Solver
+from core.solvers.neptune.utils import init_x, init_c
+from core.solvers.solver import Solver
 
 class EFTTCStep1CPUBase(Solver):
     def __init__(self, objective="delay_utilization", alpha=0.5, **kwargs):
