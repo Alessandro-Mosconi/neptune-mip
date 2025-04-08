@@ -45,6 +45,22 @@ pivot_allocations = df.pivot(index="test_case", columns="method", values="num_al
 # Formattazione numerica per una migliore leggibilità
 pd.options.display.float_format = '{:,.3f}'.format
 
+# Ordina le colonne: prima Neptune, poi NeptuneWith, poi EFTTC
+def reorder_columns(df):
+    ordered_cols = ['test_case']
+    if 'test_case' in df.columns:
+        other_cols = [col for col in df.columns if col != 'test_case']
+        neptune = sorted([col for col in other_cols if col.startswith('Neptune') and not col.startswith('NeptuneWith')])
+        neptune_with = sorted([col for col in other_cols if col.startswith('NeptuneWith')])
+        efttc = sorted([col for col in other_cols if col.startswith('EFTTC')])
+        ordered_cols += neptune + neptune_with + efttc
+        return df[ordered_cols]
+    return df
+
+pivot_scores_step1 = reorder_columns(pivot_scores_step1)
+pivot_scores_step2 = reorder_columns(pivot_scores_step2)
+pivot_allocations = reorder_columns(pivot_allocations)
+
 # Stampa dei risultati
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', None)
@@ -62,6 +78,7 @@ print(pivot_allocations.to_string(index=False))
 for suffix in ["MinDelay", "MinDelayAndUtilization", "MinUtilization"]:
     matching_cols_step1 = [col for col in pivot_scores_step1.columns if col.endswith(suffix)]
     matching_cols_step2 = [col for col in pivot_scores_step2.columns if col.endswith(suffix)]
+    matching_cols_alloc = [col for col in pivot_allocations.columns if col.endswith(suffix)]
 
     if matching_cols_step1:
         print(f"\n[📊] Score Step1 - Metodo {suffix}")
@@ -70,6 +87,10 @@ for suffix in ["MinDelay", "MinDelayAndUtilization", "MinUtilization"]:
     if matching_cols_step2:
         print(f"\n[📊] Score Step2 - Metodo {suffix}")
         print(pivot_scores_step2[['test_case'] + matching_cols_step2].to_string(index=False))
+
+    if matching_cols_alloc:
+        print(f"\n[📊] Allocazioni CPU - Metodo {suffix}")
+        print(pivot_allocations[['test_case'] + matching_cols_alloc].to_string(index=False))
 
 # Salvataggio opzionale in CSV
 pivot_scores_step1.to_csv("score_step1.csv", index=False)
