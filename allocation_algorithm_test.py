@@ -1,5 +1,6 @@
 import pprint
 import json
+import time
 
 import requests
 
@@ -7,12 +8,15 @@ for solver_type in [
     "EFTTCMinDelay",
     "EFTTCMinUtilization",
     "EFTTCMinDelayAndUtilization",
+    "EFTTCMultiPathMinDelay",
+    "EFTTCMultiPathMinUtilization",
+    "EFTTCMultiPathMinDelayAndUtilization",
     "NeptuneWithEFTTCMinDelay",
     "NeptuneWithEFTTCMinUtilization",
     "NeptuneWithEFTTCMinDelayAndUtilization",
     "NeptuneMinDelayAndUtilization",
     "NeptuneMinDelay",
-    #"NeptuneMinUtilization",
+    "NeptuneMinUtilization",
     #"VSVBP",
     #"Criticality",
     #"CriticalityHeuristic",
@@ -293,7 +297,9 @@ for solver_type in [
     ]
 
     for i, input_request in enumerate(inputs):
+        start_time = time.time()
         response = requests.request(method='get', url="http://localhost:5000/", json=input_request)
+        elapsed_time = time.time() - start_time
 
         print("=" * 40)
         print(f"Solver: {solver_type}")
@@ -303,6 +309,7 @@ for solver_type in [
 
         try:
             response_json = response.json()
+            response_json["response_time"] = elapsed_time  # Aggiungi tempo di risposta
             pprint.pprint(response_json)
             with open(output_file, 'w') as f:
                 json.dump(response_json, f, indent=4)

@@ -1,5 +1,6 @@
 import json
 from logging.config import dictConfig
+import time
 
 from flask import Flask, request
 
@@ -42,8 +43,10 @@ def serve():
 
     solver = eval(solver_type)(**solver_args)
     print(solver)
+    start_time = time.time()
     solver.load_data(data_to_solver_input(input, with_db=with_db, workload_coeff=input.get("workload_coeff", 1))) 
     solver.solve()
+    processing_time = time.time() - start_time
     x, c = solver.results()
     score = solver.score()
     print("INTER", score)
@@ -53,7 +56,8 @@ def serve():
             "cpu_allocations": c,
             "gpu_routing_rules": {},
             "gpu_allocations": {},
-            "score" : score
+            "score" : score,
+            "processing_time": processing_time
         }),
         status=200,
         mimetype='application/json'

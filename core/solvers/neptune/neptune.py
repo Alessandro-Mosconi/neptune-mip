@@ -46,7 +46,6 @@ class NeptuneMinDelayAndUtilization(NeptuneBase):
             **kwargs
             )
 
-
 class NeptuneMinDelay(NeptuneBase):
     def __init__(self, **kwargs):
         super().__init__(
@@ -84,33 +83,6 @@ class NeptuneWithEFTTCMinUtilization(NeptuneBase):
         )
 
 class NeptuneWithEFTTCMinDelayAndUtilization(NeptuneBase):
-    def __init__(self, alpha=0.5, **kwargs):
-        super().__init__(
-            step1=EF_TTC_MinDelayAndUtilization(alpha=alpha, **kwargs),
-            step2_delete=NeptuneStep2MinDelayAndUtilization(mode="delete", **kwargs),
-            step2_create=NeptuneStep2MinDelayAndUtilization(mode="create", **kwargs),
-            **kwargs
-        )
-
-class EFTTCMinDelay(NeptuneBase):
-    def __init__(self, **kwargs):
-        super().__init__(
-            step1=EF_TTC_MinDelay(**kwargs),
-            step2_delete=NeptuneStep2MinDelayAndUtilization(mode="delete", **kwargs),
-            step2_create=NeptuneStep2MinDelayAndUtilization(mode="create", **kwargs),
-            **kwargs
-        )
-
-class EFTTCMinUtilization(NeptuneBase):
-    def __init__(self, **kwargs):
-        super().__init__(
-            step1=EF_TTC_MinUtilization(**kwargs),
-            step2_delete=NeptuneStep2MinDelayAndUtilization(mode="delete", **kwargs),
-            step2_create=NeptuneStep2MinDelayAndUtilization(mode="create", **kwargs),
-            **kwargs
-        )
-
-class EFTTCMinDelayAndUtilization(NeptuneBase):
     def __init__(self, alpha=0.5, **kwargs):
         super().__init__(
             step1=EF_TTC_MinDelayAndUtilization(alpha=alpha, **kwargs),
