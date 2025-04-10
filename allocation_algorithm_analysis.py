@@ -64,10 +64,12 @@ def reorder_columns(df):
         other_cols = [col for col in df.columns if col != 'test_case']
         neptune = sorted([col for col in other_cols if col.startswith('Neptune') and not col.startswith('NeptuneWith')])
         neptune_with = sorted([col for col in other_cols if col.startswith('NeptuneWith')])
-        efttc = sorted([col for col in other_cols if col.startswith('EFTTC')])
-        ordered_cols += neptune + neptune_with + efttc
+        efttc = sorted([col for col in other_cols if col.startswith('Efttc') and not col.startswith('EFTTCMultiPath')])
+        efttc_multi = sorted([col for col in other_cols if col.startswith('EFTTCMultiPath')])
+        ordered_cols += neptune + neptune_with + efttc + efttc_multi
         return df[ordered_cols]
     return df
+
 
 pivot_scores_step1 = reorder_columns(pivot_scores_step1)
 pivot_scores_step2 = reorder_columns(pivot_scores_step2)
@@ -145,7 +147,7 @@ test_case_labels = {
 color_map = {
     "Neptune": "#f90d1b",
     "NeptuneWithEFTTC": "#fde005",
-    "EFTTC": "#9d00fe",
+    "Efttc": "#9d00fe",
     "EFTTCMultiPath": "#5d00fe"
 }
 
@@ -162,8 +164,8 @@ def plot_grouped_bars(df, suffix, ylabel, title, log_scale=False):
             colors.append(color_map["NeptuneWithEFTTC"])
         elif col.startswith("EFTTCMultiPath"):
             colors.append(color_map["EFTTCMultiPath"])
-        elif col.startswith("EFTTC"):
-            colors.append(color_map["EFTTC"])
+        elif col.startswith("Efttc"):
+            colors.append(color_map["Efttc"])
         else:
             colors.append(color_map["Neptune"])
 

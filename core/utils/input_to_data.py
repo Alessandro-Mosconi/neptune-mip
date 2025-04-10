@@ -25,9 +25,9 @@ keys = [
 ]
 
 solvers = [
-    "EFTTCMinDelay",
-    "EFTTCMinUtilization",
-    "EFTTCMinDelayAndUtilization",
+    "EfttcMinDelay",
+    "EfttcMinUtilization",
+    "EfttcMinDelayAndUtilization",
     "EFTTCMultiPathMinDelay",
     "EFTTCMultiPathMinUtilization",
     "EFTTCMultiPathMinDelayAndUtilization",

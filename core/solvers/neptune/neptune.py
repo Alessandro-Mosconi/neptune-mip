@@ -1,6 +1,6 @@
 from .neptune_step2 import *
 from .utils.output import convert_x_matrix, convert_c_matrix
-from core.solvers.efttc.ef_ttc_solver import *
+#from core.solvers.efttc.ef_ttc_solver import *
 
 
 class NeptuneBase(Solver):
@@ -63,7 +63,7 @@ class NeptuneMinUtilization(NeptuneBase):
             NeptuneStep2MinUtilization(mode="create", **kwargs),
             **kwargs
             )
-
+'''
 class NeptuneWithEFTTCMinDelay(NeptuneBase):
     def __init__(self, **kwargs):
         super().__init__(
@@ -90,3 +90,4 @@ class NeptuneWithEFTTCMinDelayAndUtilization(NeptuneBase):
             step2_create=NeptuneStep2MinDelayAndUtilization(mode="create", **kwargs),
             **kwargs
         )
+'''
