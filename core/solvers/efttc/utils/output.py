@@ -12,6 +12,7 @@ def output_x_and_c(data, x, c):
     for j in range(len(data.nodes)):
         for f in range(len(data.functions)):
             c_matrix[f][j] = float(c[(f, j)]["val"])  # True/False → 1.0/0.0
+
     return x_matrix, c_matrix
 
 def output_n(data, n):

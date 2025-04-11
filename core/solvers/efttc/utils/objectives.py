@@ -24,10 +24,6 @@ def score_maximize_handled_requests(data, x):
     return -total_handled  # Perché usiamo minimizzazione
 
 def score_minimize_node_utilization(data, n):
-    # Stampa dell'input (n)
-    print("Input 'n' (allocation state per node):")
-    for i in range(len(data.nodes)):
-        print(f"Node {i}: {n[i]['val']}")
     return sum(1 for i in range(len(data.nodes)) if n[i]["val"])
 
 def score_minimize_node_delay_and_utilization(data, n, x, alpha):

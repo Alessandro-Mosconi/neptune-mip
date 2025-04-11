@@ -3,10 +3,23 @@ import os
 import json
 import matplotlib.pyplot as plt
 import numpy as np
+from collections import defaultdict  # <--- AGGIUNGI QUESTA RIGA
+import seaborn as sns
 
 # Percorso alla tua cartella contenente i file JSON
 directory = "/home/alessandromosconi/Desktop/fork/neptune-mip/allocation_algorithm_test"
 results = []
+alloc_matrix = {}
+
+# Crea tabella: per ogni metodo/test_case, numero di funzioni su ciascun nodo
+def generate_function_node_count_table(method, test_case):
+    alloc = alloc_matrix.get((method, test_case), {})
+    fn_to_nodes = defaultdict(set)
+    for fn, node in alloc.items():
+        fn_to_nodes[fn].add(node)
+    fn_counts = {fn: len(nodes) for fn, nodes in fn_to_nodes.items()}
+    return pd.DataFrame([fn_counts]).rename(index={0: f"{method}_case{test_case}"})
+
 
 # Estrazione dei dati
 for file in os.listdir(directory):
@@ -39,6 +52,13 @@ for file in os.listdir(directory):
                 "processing_time": processing_time,
                 "response_time": response_time
             })
+
+            # Salva assegnazioni funzione → nodo
+            for fn, node_map in cpu_allocations.items():
+                for node, allocated in node_map.items():
+                    if allocated:
+                        key = (method, test_case)
+                        alloc_matrix.setdefault(key, {})[fn] = node
 
 # Creazione del DataFrame
 df = pd.DataFrame(results)
@@ -97,6 +117,18 @@ print(pivot_proc_time.to_string(index=False))
 print("\n[🌐] Tempo totale di risposta (response_time)")
 print(pivot_resp_time.to_string(index=False))
 
+
+# Analisi nodi usati per ciascuna funzione
+cpu_routing_rules = data.get("cpu_routing_rules", {})
+func_to_nodes = {}
+
+for node, fn_rules in cpu_routing_rules.items():
+    for fn, dests in fn_rules.items():
+        if fn not in func_to_nodes:
+            func_to_nodes[fn] = set()
+        func_to_nodes[fn].update(dests.keys())
+
+
 # Raggruppamento per famiglie di metodi
 for suffix in ["MinDelay", "MinDelayAndUtilization", "MinUtilization"]:
     matching_cols_step1 = [col for col in pivot_scores_step1.columns if col.endswith(suffix)]
@@ -124,6 +156,32 @@ for suffix in ["MinDelay", "MinDelayAndUtilization", "MinUtilization"]:
     if matching_cols_resp:
         print(f"\n[🌐] Tempo di risposta - Metodo {suffix}")
         print(pivot_resp_time[['test_case'] + matching_cols_resp].to_string(index=False))
+
+    print(f"\n[🧮] Numero di nodi usati per ogni funzione - Gruppo {suffix}")
+    dfs_fn = []
+    for (method, test_case), alloc in alloc_matrix.items():
+        if method.endswith(suffix):
+            df_tmp = generate_function_node_count_table(method, test_case)
+            dfs_fn.append(df_tmp)
+
+    if dfs_fn:
+        fn_node_count_df = pd.concat(dfs_fn).fillna(0).astype(int)
+
+        # Estrai il numero di test_case e metodo per ordinare
+        fn_node_count_df = fn_node_count_df.reset_index()
+        fn_node_count_df["test_case"] = fn_node_count_df["index"].str.extract(r'_case(\d+)').astype(int)
+
+        # (Opzionale) ordina anche per nome metodo per gruppi leggibili
+        fn_node_count_df["method"] = fn_node_count_df["index"].str.extract(r'^(.*?)_case')
+
+        # Ordina prima per test_case, poi per metodo (se vuoi)
+        fn_node_count_df = fn_node_count_df.sort_values(["test_case", "method"])
+
+        # Ripristina l'indice originale
+        fn_node_count_df = fn_node_count_df.set_index("index")
+        fn_node_count_df = fn_node_count_df.drop(columns=["test_case", "method"])
+
+        print(fn_node_count_df.to_string())
 
 # Salvataggio opzionale in CSV
 pivot_scores_step1.to_csv("score_step1.csv", index=False)
@@ -183,9 +241,19 @@ def plot_grouped_bars(df, suffix, ylabel, title, log_scale=False):
     plt.tight_layout()
     plt.show()
 
+
 # Plot per ciascun gruppo e metrica
 #for suffix in ["MinDelay", "MinDelayAndUtilization", "MinUtilization"]:
     #plot_grouped_bars(pivot_proc_time, suffix, "Tempo di elaborazione (ms)", "Tempo di elaborazione")
     #plot_grouped_bars(pivot_proc_time, suffix, "Tempo di elaborazione (ms)", "Tempo di elaborazione (scala log)", log_scale=True)
     #plot_grouped_bars(pivot_resp_time, suffix, "Tempo di risposta (ms)", "Tempo di risposta")
     #plot_grouped_bars(pivot_resp_time, suffix, "Tempo di risposta (ms)", "Tempo di risposta (scala log)", log_scale=True)
+
+    # 🔥 Heatmap
+    # plt.figure(figsize=(12, max(6, len(node_count_df) * 0.5)))
+    # sns.heatmap(node_count_df, annot=True, fmt="d", cmap="YlGnBu", cbar_kws={"label": "N. funzioni"})
+    # plt.title(f"Heatmap nodo x allocazione funzione - {suffix}", fontsize=14)
+    # plt.xlabel("Nodo")
+    # plt.ylabel("Metodo + Test Case")
+    # plt.tight_layout()
+    # plt.show()

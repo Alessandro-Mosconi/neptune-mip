@@ -8,15 +8,15 @@ for solver_type in [
     "EfttcMinDelay",
     "EfttcMinUtilization",
     "EfttcMinDelayAndUtilization",
-    "EFTTCMultiPathMinDelay",
-    "EFTTCMultiPathMinUtilization",
-    "EFTTCMultiPathMinDelayAndUtilization",
+    #  "EFTTCMultiPathMinDelay",
+    #  "EFTTCMultiPathMinUtilization",
+    #  "EFTTCMultiPathMinDelayAndUtilization",
     #"NeptuneWithEFTTCMinDelay",
     #"NeptuneWithEFTTCMinUtilization",
     #"NeptuneWithEFTTCMinDelayAndUtilization",
-    "NeptuneMinDelayAndUtilization",
-    "NeptuneMinDelay",
-    "NeptuneMinUtilization",
+    #  "NeptuneMinDelayAndUtilization",
+    #  "NeptuneMinDelay",
+    #  "NeptuneMinUtilization",
     #"VSVBP",
     #"Criticality",
     #"CriticalityHeuristic",
@@ -29,6 +29,7 @@ for solver_type in [
         # One node, one function
         # No function allocated
         {
+            "case": 0,
             "solver": {
                 "type": solver_type,
                 "args": {"alpha": 0.0, "verbose": False}
@@ -69,6 +70,7 @@ for solver_type in [
         # One node, one function
         # The function was already allocated
         {
+            "case": 1,
             "solver": {
                 "type": solver_type,
                 "args": {"alpha": 0.0, "verbose": False}
@@ -110,6 +112,7 @@ for solver_type in [
         # One node, two functions
         # Both of them were not allocated
         {
+            "case": 2,
             "solver": {
                 "type": solver_type,
                 "args": {"alpha": 0.0, "verbose": False}
@@ -148,6 +151,7 @@ for solver_type in [
         # One node, two functions
         # Only one of them is allocated
         {
+            "case": 3,
             "solver": {
                 "type": solver_type,
                 "args": {"alpha": 0.0, "verbose": False}
@@ -189,6 +193,7 @@ for solver_type in [
         # One node, two functions
         # Both of them were allocated
         {
+            "case": 4,
             "solver": {
                 "type": solver_type,
                 "args": {"alpha": 0.0, "verbose": False}
@@ -232,6 +237,7 @@ for solver_type in [
         # Many node, many functions
         # None of them were allocated
         {
+            "case": 5,
             "solver": {
                 "type": solver_type,
                 "args": {"alpha": 0.0, "verbose": False}
@@ -257,6 +263,7 @@ for solver_type in [
         # Many node, many functions
         # All of them were allocated
         {
+            "case": 6,
             "solver": {
                 "type": solver_type,
                 "args": {"alpha": 0.0, "verbose": False}
@@ -290,6 +297,32 @@ for solver_type in [
                 "ns/fn_4": {
                     "node_1": True,
                 },
+            },
+            "actual_gpu_allocations": {
+            }
+        },
+        # Many maby node, many many functions
+        # None of them were allocated
+        {
+            "case": 7,
+            "solver": {
+                "type": solver_type,
+                "args": {"alpha": 0.0, "verbose": False}
+            },
+            "with_db": False,
+            "community": "community-test",
+            "namespace": "namespace-test",
+            "node_names": [f"node_{i}" for i in range(50)],
+            "node_memories": [100 for i in range(50)],
+            "node_cores": [100 for i in range(50)],
+            "gpu_node_names": [],
+            "gpu_node_memories": [],
+            "function_names": [f"ns/fn_{i}" for i in range(20)],
+            "function_memories": [30 for i in range(20)],
+            "function_max_delays": [100 for i in range(20)],
+            "gpu_function_names": [],
+            "gpu_function_memories": [],
+            "actual_cpu_allocations": {
             },
             "actual_gpu_allocations": {
             }
