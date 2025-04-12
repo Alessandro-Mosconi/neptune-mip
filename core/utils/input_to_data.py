@@ -135,6 +135,18 @@ def setup_community_data(input, data):
     data.gpu_function_memories = input.get('gpu_function_memories')
     data.max_delay_matrix = [1000 for _ in range(len(data.function_memories))]
 
+def setup_custom_workload_on_source(data):
+    n_funcs = len(data.functions)
+    n_nodes = len(data.nodes)
+    half_f = n_funcs // 2
+    half_n = n_nodes // 2
+
+    data.workload_on_source_matrix = np.zeros((n_funcs, n_nodes), dtype=int)
+
+    for f in range(half_f):
+        for i in range(half_n):
+            data.workload_on_source_matrix[f][i] = 10
+
 
 def setup_runtime_data(data, input):
     node_delay_matrix = input.get('node_delay_matrix', None)
@@ -148,8 +160,9 @@ def setup_runtime_data(data, input):
     if workload_on_source_matrix:
          data.workload_on_source_matrix = np.array(workload_on_source_matrix)
     else:
-        data.workload_on_source_matrix = np.array([[0 for _ in data.nodes] for _ in data.functions])
-    
+        setup_custom_workload_on_source(data)
+        #data.workload_on_source_matrix = np.array([[0 for _ in data.nodes] for _ in data.functions])
+
     workload_on_destination_matrix = input.get('workload_on_destination_matrix', None)
     if workload_on_destination_matrix:
          data.workload_on_destination_matrix = np.array(workload_on_destination_matrix)

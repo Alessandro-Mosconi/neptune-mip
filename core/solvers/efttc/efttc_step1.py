@@ -11,6 +11,7 @@ class EfttcStepBase(Solver):
         self.x, self.c = {}, {}
         self.assigned_functions = set()
         self.assigned_nodes = set()
+        self._score_cache = {}
 
     def init_vars(self):
         init_x(self.data, self.x)
@@ -22,16 +23,43 @@ class EfttcStepBase(Solver):
     def get_constraints(self):
         return True # constrain_c_according_to_x(self.data, self.c, self.x) and constrain_memory_usage(self.data, self.c)
 
+    def snapshot_vars(self):
+        return {
+            "x": {k: v.copy() for k, v in self.x.items()},
+            "c": {k: v.copy() for k, v in self.c.items()},
+            "n": {k: v.copy() for k, v in self.n.items()} if hasattr(self, "n") else None
+        }
+
+
+    def restore_vars(self, snapshot):
+        self.x = snapshot["x"]
+        self.c = snapshot["c"]
+        if snapshot["n"] is not None:
+            self.n = snapshot["n"]
+
     def solve(self):
         self.init_vars()
+
+        print("DELAY MATRIX")
+        print(self.data.node_delay_matrix)
+
+        print("WORKLOAD MATRIX")
+        print(self.data.workload_matrix)
+
         remaining_functions = set(range(len(self.data.functions)))
         remaining_nodes = set(range(len(self.data.nodes)))
         tried_cycles = set()
         while remaining_functions:
+            print(f"\n=== Iterazione TTC ===")
+            print(f"🧱 Numero di invalid_pairs: {len(self.invalid_pairs)}")
+
             print("♻️ remaining_functions")
             print(remaining_functions)
             print("♻️ remaining_nodes")
             print(remaining_nodes)
+
+            # ✅ Svuota la cache per evitare score obsoleti
+            self._score_cache.clear()
 
             graph = self.build_preference_graph(remaining_functions, remaining_nodes)
             print("🤖 graph")
@@ -46,28 +74,19 @@ class EfttcStepBase(Solver):
                 break
 
             # backup stato
-            snapshot_x = copy.deepcopy(self.x)
-            snapshot_c = copy.deepcopy(self.c)
-            if hasattr(self, "n"):
-                snapshot_n = copy.deepcopy(self.n)
+            snapshot = self.snapshot_vars()
 
             print("✔️ Ciclo trovato, assegno")
-            self.assign_cycle(cycle)
+            hasSuccess = self.assign_cycle(cycle)
             self.update_n_from_c()
+            # print("🍀 C: ")
+            # print(self.c)
 
-            # Verifica chi può essere assegnato
-            failed_assignments = [(f, j) for f, j in cycle if not self.can_assign(f, j)]
-
-            if failed_assignments:
-                print("⛔️ Alcune assegnazioni non sono valide:", failed_assignments)
-                self.x = snapshot_x
-                self.c = snapshot_c
-                if hasattr(self, "n"):
-                    self.n = snapshot_n
+            if not hasSuccess:
+                print("⛔️ Alcune assegnazioni non sono valide")
+                self.restore_vars(snapshot)
                 tried_cycles.add(cycle_key)
-                for f, j in failed_assignments:
-                    self.invalid_pairs.add((f, j))
-                continue  # prova un altro ciclo
+                continue
 
             # Verifica i vincoli globali
             if self.get_constraints():
@@ -77,17 +96,28 @@ class EfttcStepBase(Solver):
                         self.data.function_memory_matrix[f2] if self.c[(f2, j)]["val"] else 0
                         for f2 in range(len(self.data.functions))
                     )
-                    if mem_used >= self.data.node_memory_matrix[j]:
+                    if mem_used == self.data.node_memory_matrix[j]:
                         remaining_nodes.discard(j)
+
+                    if mem_used > self.data.node_memory_matrix[j]:
+                        self.restore_vars(snapshot)
+                        print("⚠️ Ciclo trovato ma non ci sta nel nodo")
+                        for f, j in cycle:
+                            self.invalid_pairs.add((f, j))
+                    else:
+                        print("✅ Ciclo trovato e variabili aggiornate")
+                        self.snapshot_vars()
+
+
             else:
                 print("⚠️ Ciclo trovato ma viola i vincoli globali. Scartato.")
-                self.x = snapshot_x
-                self.c = snapshot_c
-                if hasattr(self, "n"):
-                    self.n = snapshot_n
+                self.restore_vars(snapshot)
                 tried_cycles.add(cycle_key)
                 for f, j in cycle:
                     self.invalid_pairs.add((f, j))
+
+        print("🍀 C: ")
+        print(self.c)
 
     def build_preference_graph(self, remaining_functions, remaining_nodes):
         graph = {}
@@ -109,10 +139,10 @@ class EfttcStepBase(Solver):
 
     def rank_nodes_for_function(self, f, node_pool):
         valid_nodes = [j for j in node_pool if (f, j) not in self.invalid_pairs]
-        return sorted(valid_nodes, key=lambda j: self.score_local(f, j))
+        return sorted(valid_nodes, key=lambda j: (self.score_local(f, j), abs(j)))
 
     def rank_functions_for_node(self, j, function_pool):
-        return sorted(function_pool, key=lambda f: self.score_local(f, j))
+        return sorted(function_pool, key=lambda f: (self.score_local(f, j), abs(f)))
 
     def find_cycle(self, graph):
         visited = set()
@@ -133,9 +163,10 @@ class EfttcStepBase(Solver):
                 next_node = graph[current]
                 path.append(next_node)
 
-                if next_node == start:
-                    # trasformiamo tutto in coppie coerenti (funzione, nodo)
-                    cycle = [(path[i], path[i + 1]) for i in range(len(path) - 1)]
+                if next_node in local_visited:
+                    # ciclo trovato
+                    cycle_start = path.index(next_node)
+                    cycle = [(path[i], path[i + 1]) for i in range(cycle_start, len(path) - 1)]
                     cleaned = []
                     seen = set()
                     for a, b in cycle:
@@ -165,16 +196,21 @@ class EfttcStepBase(Solver):
             )
 
     def assign_cycle(self, cycle):
+        success = False  # flag per tracciare se almeno un'assegnazione è andata a buon fine
         for f, j in cycle:
             if isinstance(f, int) and isinstance(j, int):
                 j = ~j if j < 0 else j  # convert node back from negative if needed
                 if not self.can_assign(f, j):
-                    print(f"❌ Non posso assegnare f={f} a j={j} perchè non ci sta")
+                    print(f"❌ Non posso assegnare f={f} a j={j} perché non ci sta")
+                    self.invalid_pairs.add((f, j))
                     continue
                 self.c[(f, j)]["val"] = True
+                print(f"📍 Assegno funzione {f} al nodo {j} via ciclo TTC")
                 for i in range(len(self.data.nodes)):
                     self.x[(i, f, j)]["val"] = 1.0
                 print(f"✅ Assegnata funzione {f} al nodo {j} via ciclo TTC")
+                success = True
+        return success
 
     def can_assign(self, f, j):
         mem_required = self.data.function_memory_matrix[f]
@@ -191,6 +227,9 @@ class EfttcStepBase(Solver):
         raise NotImplementedError("Efttc must implement score_local(f, j)")
 
     def results(self):
+        np.set_printoptions(threshold=np.inf, linewidth=np.inf, suppress=True)
+
+
         x, c = output_x_and_c(self.data, self.x, self.c)
         print("Step 1 - x:", x, sep='\n')
         print("Step 1 - c:", c, sep='\n')
@@ -229,9 +268,33 @@ class EfttcStep1CPUMinUtilization(EfttcStep1CPUBase):
 
     def get_objective(self):
         return score_minimize_node_utilization(self.data, self.n)
-
+    '''
     def score_local(self, f, j):
         return sum(self.c[(f2, j)]["val"] for f2 in range(len(self.data.functions)))
+   
+    def score_local(self, f, j):
+        utilizzo = sum(self.c[(f2, j)]["val"] for f2 in range(len(self.data.functions)))
+        cost = self.data.node_costs[j]
+        budget_left = self.data.node_budget - sum(
+            self.n[k]["val"] * self.data.node_costs[k]
+            for k in range(len(self.data.nodes))
+        )
+        return utilizzo * cost if cost <= budget_left else float('inf')  # evita nodi che sforano
+    
+    
+    def score_local(self, f, j):
+        utilizzo = sum(self.c[(f2, j)]["val"] for f2 in range(len(self.data.functions)))
+        return utilizzo * self.data.node_costs[j]  # penalizza nodi costosi
+        
+    '''
+
+    def score_local(self, f, j):
+        #TODO considerare funzioni già allocate inizializzare c con data.actual_cpu_allocations
+        utilizzo = sum(self.c[(f2, j)]["val"] for f2 in range(len(self.data.functions)))
+        costo = self.data.node_costs[j]
+
+        # Penalizza nodi poco utilizzati e costosi: più è alto lo score, peggio è
+        return costo / (1 + utilizzo)
 
     def results(self):
         x, c = super().results()
@@ -244,9 +307,15 @@ class EfttcStep1CPUMinUtilization(EfttcStep1CPUBase):
 class EfttcStep1CPUMinDelay(EfttcStep1CPUBase):
     def get_objective(self):
         return score_minimize_network_delay(self.data, self.x)
-
+    '''
     def score_local(self, f, j):
         return self.data.node_delay_matrix[:, j].dot(self.data.workload_matrix[f])
+    '''
+    def score_local(self, f, j):
+        key = (f, j)
+        if key not in self._score_cache:
+            self._score_cache[key] = self.data.node_delay_matrix[:, j].dot(self.data.workload_matrix[f])
+        return self._score_cache[key]
 
 
 class EfttcStep1CPUMinDelayAndUtilization(EfttcStep1CPUMinUtilization):
