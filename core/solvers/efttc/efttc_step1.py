@@ -37,6 +37,49 @@ class EfttcStepBase(Solver):
         if snapshot["n"] is not None:
             self.n = snapshot["n"]
 
+    def should_remove_function(self, f, remaining_nodes):
+        current_score = self.score()
+        print(f"\n🔍 Verifica se la funzione {f} deve essere rimossa (score attuale: {current_score})")
+
+        for j in remaining_nodes:
+            if (f, j) in self.invalid_pairs or self.c[(f, j)]["val"]:
+                print(f"⚠️ Funzione {f} è già instanziata su nodo {j} oppure è una coppia invalida.")
+                continue
+
+            if not self.can_assign(f, j):
+                print(f"❌ Nodo {j} non ha abbastanza memoria per la funzione {f}")
+                continue
+
+            snapshot = self.snapshot_vars()
+
+            # Prova ad aggiungere f su j
+            self.c[(f, j)]["val"] = True
+            self.update_n_from_c()
+
+            # Redistribuisci le richieste: per ogni nodo source i, manda verso il j* con delay minimo
+            for i in range(len(self.data.nodes)):
+                if self.data.workload_matrix[f, i] > 0:
+                    candidates = [
+                        jj for jj in range(len(self.data.nodes))
+                        if self.c[(f, jj)]["val"]
+                    ]
+                    if candidates:
+                        best_j = min(candidates, key=lambda jj: self.data.node_delay_matrix[i, jj])
+                        for jj in range(len(self.data.nodes)):
+                            self.x[(i, f, jj)]["val"] = 1.0 if jj == best_j else 0.0
+
+            new_score = self.score()
+            print(f"✅ Tentativo su nodo {j}: nuovo score {new_score}")
+
+            self.restore_vars(snapshot)
+
+            if new_score < current_score - 1e-6:  # miglioramento vero
+                print(f"📈 Nuova assegnazione su nodo {j} migliora lo score di funzione {f}")
+                return False
+
+        print(f"🗑️ Nessun miglioramento possibile per f={f}, la funzione può essere rimossa")
+        return True
+
     def solve(self):
         self.init_vars()
 
@@ -45,6 +88,9 @@ class EfttcStepBase(Solver):
 
         print("WORKLOAD MATRIX")
         print(self.data.workload_matrix)
+
+        print("ACTUAL ALLOCATION")
+        print(getattr(self.data, "old_allocations_matrix", {}))
 
         remaining_functions = set(range(len(self.data.functions)))
         remaining_nodes = set(range(len(self.data.nodes)))
@@ -90,7 +136,13 @@ class EfttcStepBase(Solver):
 
             # Verifica i vincoli globali
             if self.get_constraints():
-                remaining_functions -= {f for f, _ in cycle}
+
+                self.update_x_from_c()
+
+                for f, _ in cycle:
+                    if self.should_remove_function(f, remaining_nodes):
+                        remaining_functions.discard(f)
+
                 for _, j in cycle:
                     mem_used = sum(
                         self.data.function_memory_matrix[f2] if self.c[(f2, j)]["val"] else 0
@@ -106,6 +158,8 @@ class EfttcStepBase(Solver):
                             self.invalid_pairs.add((f, j))
                     else:
                         print("✅ Ciclo trovato e variabili aggiornate")
+                        for f, j in cycle:
+                            self.invalid_pairs.add((f, j))
                         self.snapshot_vars()
 
 
@@ -195,6 +249,31 @@ class EfttcStepBase(Solver):
                 for f in range(len(self.data.functions))
             )
 
+    def update_x_from_c(self):
+        for f in range(len(self.data.functions)):
+            for i in range(len(self.data.nodes)):
+                # Trova tutti i nodi j dove la funzione f è attiva
+                active_nodes = [
+                    j for j in range(len(self.data.nodes))
+                    if self.c[(f, j)]["val"]
+                ]
+
+                if not active_nodes:
+                    # Nessuna istanza attiva per f, ignoro questa richiesta
+                    continue
+
+                # Calcola il delay minimo per (i, f)
+                delays = {j: self.data.node_delay_matrix[i][j] for j in active_nodes}
+                min_delay = min(delays.values())
+
+                # Prende tutti i nodi j con delay minimo
+                best_nodes = [j for j, d in delays.items() if abs(d - min_delay) < 1e-6]
+
+                # Distribuisci in modo uniforme tra i best nodes
+                val = 1.0 / len(best_nodes)
+                for j in active_nodes:
+                    self.x[(i, f, j)]["val"] = val if j in best_nodes else 0.0
+
     def assign_cycle(self, cycle):
         success = False  # flag per tracciare se almeno un'assegnazione è andata a buon fine
         for f, j in cycle:
@@ -205,9 +284,6 @@ class EfttcStepBase(Solver):
                     self.invalid_pairs.add((f, j))
                     continue
                 self.c[(f, j)]["val"] = True
-                print(f"📍 Assegno funzione {f} al nodo {j} via ciclo TTC")
-                for i in range(len(self.data.nodes)):
-                    self.x[(i, f, j)]["val"] = 1.0
                 print(f"✅ Assegnata funzione {f} al nodo {j} via ciclo TTC")
                 success = True
         return success
@@ -289,12 +365,28 @@ class EfttcStep1CPUMinUtilization(EfttcStep1CPUBase):
     '''
 
     def score_local(self, f, j):
-        #TODO considerare funzioni già allocate inizializzare c con data.actual_cpu_allocations
-        utilizzo = sum(self.c[(f2, j)]["val"] for f2 in range(len(self.data.functions)))
-        costo = self.data.node_costs[j]
+        # planned: assegnazioni che il solver sta valutando
+        planned_util = sum(
+            self.c[(f2, j)]["val"]
+            for f2 in range(len(self.data.functions))
+        )
 
-        # Penalizza nodi poco utilizzati e costosi: più è alto lo score, peggio è
-        return costo / (1 + utilizzo)
+        # warm start bonus: se la funzione f è già attiva su j
+        warm_bonus = 1.0
+        actual_alloc = getattr(self.data, "old_allocations_matrix", None)
+
+        if isinstance(actual_alloc, np.ndarray):
+            warm_bonus = 0.5 if actual_alloc[f, j] else 1.0
+
+            # opzionale: conteggio di funzioni già attive su j
+            actual_util = int(np.sum(actual_alloc[:, j]))
+        else:
+            actual_util = 0
+
+        total_util = planned_util + actual_util
+        cost = self.data.node_costs[j]
+
+        return (cost / (1 + total_util)) * warm_bonus
 
     def results(self):
         x, c = super().results()
@@ -315,7 +407,16 @@ class EfttcStep1CPUMinDelay(EfttcStep1CPUBase):
         key = (f, j)
         if key not in self._score_cache:
             self._score_cache[key] = self.data.node_delay_matrix[:, j].dot(self.data.workload_matrix[f])
-        return self._score_cache[key]
+
+        alloc_matrix = getattr(self.data, "old_allocations_matrix", None)
+
+        if isinstance(alloc_matrix, np.ndarray):
+            if alloc_matrix[f, j] == 1:
+                warm_bonus = 0.5
+            else:
+                warm_bonus = 1.0
+
+        return self._score_cache[key] * warm_bonus
 
 
 class EfttcStep1CPUMinDelayAndUtilization(EfttcStep1CPUMinUtilization):
@@ -331,19 +432,15 @@ class EfttcStep1CPUMinDelayAndUtilization(EfttcStep1CPUMinUtilization):
         return score_minimize_node_delay_and_utilization(self.data, self.n, self.x, self.alpha)
 
     def score_local(self, f, j):
+        alloc_matrix = getattr(self.data, "old_allocations_matrix", None)
+
+        if isinstance(alloc_matrix, np.ndarray):
+            if alloc_matrix[f, j] == 1:
+                warm_bonus = 0.5
+            else:
+                warm_bonus = 1.0
+
         util = sum(self.c[(f2, j)]["val"] for f2 in range(len(self.data.functions)))
         delay = self.data.node_delay_matrix[:, j].dot(self.data.workload_matrix[f])
-        return self.alpha * util + (1 - self.alpha) * delay
+        return (self.alpha * util + (1 - self.alpha) * delay ) * warm_bonus
 
-
-class EfttcStep1CPUMinDelayTTC(EfttcStepBase):
-    def get_constraints(self):
-        return (super().get_constraints()
-                #and constrain_handle_required_requests(self.data, self.x)
-                and constrain_CPU_usage(self.data, self.x))
-
-    def get_objective(self):
-        return score_minimize_network_delay(self.data, self.x)
-
-    def score_local(self, f, j):
-        return self.data.node_delay_matrix[:, j].dot(self.data.workload_matrix[f])

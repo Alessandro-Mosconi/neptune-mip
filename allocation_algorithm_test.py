@@ -6,7 +6,7 @@ import requests
 
 for solver_type in [
     "EfttcMinDelay",
-    # "EfttcMinUtilization",
+    "EfttcMinUtilization",
     # "EfttcMinDelayAndUtilization",
     #  "EFTTCMultiPathMinDelay",
     #  "EFTTCMultiPathMinUtilization",
@@ -14,8 +14,8 @@ for solver_type in [
     #"NeptuneWithEFTTCMinDelay",
     #"NeptuneWithEFTTCMinUtilization",
     #"NeptuneWithEFTTCMinDelayAndUtilization",
-    #  "NeptuneMinDelayAndUtilization",
-    "NeptuneMinDelay",
+    # "NeptuneMinDelayAndUtilization",
+    # "NeptuneMinDelay",
     # "NeptuneMinUtilization",
     #"VSVBP",
     #"Criticality",
