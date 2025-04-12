@@ -8,14 +8,16 @@ class EfttcStepBase(Solver):
     def __init__(self, **kwargs):
         self.invalid_pairs = set()
         super().__init__(**kwargs)
-        self.x, self.c = {}, {}
+        self.x, self.c, self.n = {}, {}, {}
         self.assigned_functions = set()
         self.assigned_nodes = set()
         self._score_cache = {}
+        self.objective='min_delay_min_utilization'
 
     def init_vars(self):
         init_x(self.data, self.x)
         init_c(self.data, self.c)
+        init_n(self.data, self.n)
 
     def init_constraints(self):
         pass  # I vincoli vengono verificati tramite get_constraints()
@@ -25,11 +27,10 @@ class EfttcStepBase(Solver):
 
     def snapshot_vars(self):
         return {
-            "x": {k: v.copy() for k, v in self.x.items()},
-            "c": {k: v.copy() for k, v in self.c.items()},
-            "n": {k: v.copy() for k, v in self.n.items()} if hasattr(self, "n") else None
+            "x": {k: {"name": v["name"], "val": v["val"]} for k, v in self.x.items()},
+            "c": {k: {"name": v["name"], "val": v["val"]} for k, v in self.c.items()},
+            "n": {k: {"name": v["name"], "val": v["val"]} for k, v in self.n.items()} if hasattr(self, "n") else None
         }
-
 
     def restore_vars(self, snapshot):
         self.x = snapshot["x"]
@@ -83,14 +84,14 @@ class EfttcStepBase(Solver):
     def solve(self):
         self.init_vars()
 
-        print("DELAY MATRIX")
-        print(self.data.node_delay_matrix)
+        #print("DELAY MATRIX")
+        #print(self.data.node_delay_matrix)
 
-        print("WORKLOAD MATRIX")
-        print(self.data.workload_matrix)
+        #print("WORKLOAD MATRIX")
+        #print(self.data.workload_matrix)
 
-        print("ACTUAL ALLOCATION")
-        print(getattr(self.data, "old_allocations_matrix", {}))
+        #print("ACTUAL ALLOCATION")
+        #print(getattr(self.data, "old_allocations_matrix", {}))
 
         remaining_functions = set(range(len(self.data.functions)))
         remaining_nodes = set(range(len(self.data.nodes)))
@@ -108,9 +109,10 @@ class EfttcStepBase(Solver):
             self._score_cache.clear()
 
             graph = self.build_preference_graph(remaining_functions, remaining_nodes)
-            print("🤖 graph")
-            print(graph)
+            #print("🤖 graph")
+            #print(graph)
             cycle = self.find_cycle(graph)
+
             if not cycle:
                 print("❌ Nessun ciclo trovato. Allocazione terminata.")
                 break
@@ -125,8 +127,6 @@ class EfttcStepBase(Solver):
             print("✔️ Ciclo trovato, assegno")
             hasSuccess = self.assign_cycle(cycle)
             self.update_n_from_c()
-            # print("🍀 C: ")
-            # print(self.c)
 
             if not hasSuccess:
                 print("⛔️ Alcune assegnazioni non sono valide")
@@ -139,8 +139,10 @@ class EfttcStepBase(Solver):
 
                 self.update_x_from_c()
 
-                for f, _ in cycle:
-                    if self.should_remove_function(f, remaining_nodes):
+                if 'min_delay' in self.objective:
+                    self.evaluate_cycle_removals(cycle, remaining_functions, remaining_nodes)
+                else:
+                    for f, _ in cycle:
                         remaining_functions.discard(f)
 
                 for _, j in cycle:
@@ -169,9 +171,6 @@ class EfttcStepBase(Solver):
                 tried_cycles.add(cycle_key)
                 for f, j in cycle:
                     self.invalid_pairs.add((f, j))
-
-        print("🍀 C: ")
-        print(self.c)
 
     def build_preference_graph(self, remaining_functions, remaining_nodes):
         graph = {}
@@ -274,6 +273,150 @@ class EfttcStepBase(Solver):
                 for j in active_nodes:
                     self.x[(i, f, j)]["val"] = val if j in best_nodes else 0.0
 
+    def change_n_from_c(self, n, c):
+        for j in range(len(self.data.nodes)):
+            n[j]["val"] = any(
+                c[(f, j)]["val"]
+                for f in range(len(self.data.functions))
+            )
+
+    def change_x_from_c(self, x, c):
+        for f in range(len(self.data.functions)):
+            for i in range(len(self.data.nodes)):
+                # Trova tutti i nodi j dove la funzione f è attiva
+                active_nodes = [
+                    j for j in range(len(self.data.nodes))
+                    if c[(f, j)]["val"]
+                ]
+
+                if not active_nodes:
+                    # Nessuna istanza attiva per f, ignoro questa richiesta
+                    continue
+
+                # Calcola il delay minimo per (i, f)
+                delays = {j: self.data.node_delay_matrix[i][j] for j in active_nodes}
+                min_delay = min(delays.values())
+
+                # Prende tutti i nodi j con delay minimo
+                best_nodes = [j for j, d in delays.items() if abs(d - min_delay) < 1e-6]
+
+                # Distribuisci in modo uniforme tra i best nodes
+                val = 1.0 / len(best_nodes)
+                for j in active_nodes:
+                    x[(i, f, j)]["val"] = val if j in best_nodes else 0.0
+
+    def change_n_one(self, n, c, j):
+        n[j]["val"] = any(
+            c[(f, j)]["val"]
+            for f in range(len(self.data.functions))
+        )
+
+    def change_x_one(self, x, c, f):
+        for i in range(len(self.data.nodes)):
+            active_nodes = [
+                j for j in range(len(self.data.nodes))
+                if c[(f, j)]["val"]
+            ]
+
+            if not active_nodes:
+                continue
+
+            delays = {j: self.data.node_delay_matrix[i][j] for j in active_nodes}
+            min_delay = min(delays.values())
+            best_nodes = [j for j, d in delays.items() if abs(d - min_delay) < 1e-6]
+
+            val = 1.0 / len(best_nodes)
+            for j in active_nodes:
+                x[(i, f, j)]["val"] = val if j in best_nodes else 0.0
+
+    def evaluate_cycle_removals(self, cycle, remaining_functions, remaining_nodes):
+        current_score = self.score_param(self.n, self.x)
+        print(f"\n🔍 Valutazione collettiva per rimozione funzioni (score attuale: {current_score})")
+
+        candidates_to_keep = set()
+
+        for f, _ in cycle:
+            # Snapshot una volta sola per f
+            base_x = {k: {"name": v["name"], "val": v["val"]} for k, v in self.x.items()}
+            base_c = {k: {"name": v["name"], "val": v["val"]} for k, v in self.c.items()}
+            base_n = (
+                {k: {"name": v["name"], "val": v["val"]} for k, v in self.n.items()}
+                if hasattr(self, "n")
+                else {k: {"name": f"n[{k}]", "val": False} for k in range(len(self.data.nodes))}
+            )
+
+            for j in remaining_nodes:
+                if (f, j) in self.invalid_pairs or self.c[(f, j)]["val"]:
+                    continue
+                if not self.can_assign(f, j):
+                    continue
+
+                # Copie leggere da base (solo quello che serve modificare)
+                c = base_c.copy()
+                c[(f, j)] = {"name": c[(f, j)]["name"], "val": True}
+
+                n = base_n.copy()
+                self.change_n_one(n, c, j)
+
+                x = base_x.copy()
+                self.change_x_one(x, c, f)
+
+                new_score = self.score_param(n, x)
+                print(f"✅ Tentativo: funzione {f} su nodo {j} → score: {new_score}")
+
+                if new_score < current_score - 1e-6:
+                    print(f"📈 Miglioramento trovato per funzione {f}")
+                    candidates_to_keep.add(f)
+                    break
+
+        for f, _ in cycle:
+            if f not in candidates_to_keep:
+                print(f"🗑️ Funzione {f} può essere rimossa (nessun miglioramento)")
+                remaining_functions.discard(f)
+            else:
+                print(f"🔒 Funzione {f} mantenuta (miglioramento possibile)")
+    '''
+
+    def evaluate_cycle_removals(self, cycle, remaining_functions, remaining_nodes):
+        current_score = self.score_param(self.n, self.x)
+        print(f"\n🔍 [DELTA] Valutazione collettiva per rimozione funzioni (score attuale: {current_score})")
+
+        candidates_to_keep = set()
+
+        for f, _ in cycle:
+            # Snapshot una volta per f
+            base_x = {k: {"name": v["name"], "val": v["val"]} for k, v in self.x.items()}
+            base_c = {k: {"name": v["name"], "val": v["val"]} for k, v in self.c.items()}
+            base_n = {k: {"name": v["name"], "val": v["val"]} for k, v in self.n.items()}
+
+            for j in remaining_nodes:
+                if (f, j) in self.invalid_pairs or base_c[(f, j)]["val"]:
+                    continue
+                if not self.can_assign(f, j):
+                    continue
+
+                # Copie leggere e aggiornamenti locali
+                c = base_c.copy()
+                c[(f, j)] = {"name": c[(f, j)]["name"], "val": True}
+
+                n = base_n.copy()
+                self.change_n_one(n, c, j)
+
+                x = base_x.copy()
+                self.change_x_one(x, c, f)
+
+                new_score = self.score_param(n, x)
+                if new_score < current_score - 1e-6:
+                    print(f"📈 [DELTA] Funzione {f} migliorabile su nodo {j} → score: {new_score}")
+                    candidates_to_keep.add(f)
+                    break
+
+        for f, _ in cycle:
+            if f not in candidates_to_keep:
+                print(f"🗑️ [DELTA] Funzione {f} può essere rimossa (nessun miglioramento)")
+                remaining_functions.discard(f)
+    '''
+
     def assign_cycle(self, cycle):
         success = False  # flag per tracciare se almeno un'assegnazione è andata a buon fine
         for f, j in cycle:
@@ -296,23 +439,25 @@ class EfttcStepBase(Solver):
         )
         return mem_used + mem_required <= self.data.node_memory_matrix[j]
 
-    def get_objective(self):
+    def get_objective(self, n, x):
         raise NotImplementedError("Efttc must implement getObjective()")
 
     def score_local(self, f, j):
         raise NotImplementedError("Efttc must implement score_local(f, j)")
 
     def results(self):
-        np.set_printoptions(threshold=np.inf, linewidth=np.inf, suppress=True)
-
-
         x, c = output_x_and_c(self.data, self.x, self.c)
-        print("Step 1 - x:", x, sep='\n')
-        print("Step 1 - c:", c, sep='\n')
+        #print("Step 1 - x:", x, sep='\n')
+        #print("Step 1 - c:", c, sep='\n')
         return x, c
 
     def score(self):
-        return self.get_objective()
+        return self.get_objective(self.n, self.x)
+
+    def score_param(self, n, x):
+        if(n is None):
+            n = {k: {"name": f"n[{k}]", "val": False} for k in range(len(self.data.nodes))}
+        return self.get_objective(n, x)
 
 
 class EfttcStep1CPUBase(EfttcStepBase):
@@ -332,6 +477,7 @@ class EfttcStep1CPUMinUtilization(EfttcStep1CPUBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.n = {}
+        self.objective='min_utilization'
 
     def init_vars(self):
         super().init_vars()
@@ -342,8 +488,8 @@ class EfttcStep1CPUMinUtilization(EfttcStep1CPUBase):
                 # constrain_n_according_to_c(self.data, self.n, self.c) and
                 constrain_budget(self.data, self.n))
 
-    def get_objective(self):
-        return score_minimize_node_utilization(self.data, self.n)
+    def get_objective(self, n, x):
+        return score_minimize_node_utilization(self.data, n)
     '''
     def score_local(self, f, j):
         return sum(self.c[(f2, j)]["val"] for f2 in range(len(self.data.functions)))
@@ -392,13 +538,17 @@ class EfttcStep1CPUMinUtilization(EfttcStep1CPUBase):
         x, c = super().results()
         n = output_n(self.data, self.n)
         self.data.prev_n = n
-        print("Step 1 - n:", n, sep='\n')
+        #print("Step 1 - n:", n, sep='\n')
         return x, c
 
 
 class EfttcStep1CPUMinDelay(EfttcStep1CPUBase):
-    def get_objective(self):
-        return score_minimize_network_delay(self.data, self.x)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.objective='min_delay'
+
+    def get_objective(self, n, x):
+        return score_minimize_network_delay(self.data, x)
     '''
     def score_local(self, f, j):
         return self.data.node_delay_matrix[:, j].dot(self.data.workload_matrix[f])
@@ -412,7 +562,7 @@ class EfttcStep1CPUMinDelay(EfttcStep1CPUBase):
 
         if isinstance(alloc_matrix, np.ndarray):
             if alloc_matrix[f, j] == 1:
-                warm_bonus = 0.5
+                warm_bonus = 0.01
             else:
                 warm_bonus = 1.0
 
@@ -423,13 +573,14 @@ class EfttcStep1CPUMinDelayAndUtilization(EfttcStep1CPUMinUtilization):
     def __init__(self, alpha=0.5, **kwargs):
         super().__init__(**kwargs)
         self.alpha = alpha
+        self.objective='min_delay_min_utilization'
 
     def load_data(self, data):
         data.alpha = self.alpha
         super().load_data(data)
 
-    def get_objective(self):
-        return score_minimize_node_delay_and_utilization(self.data, self.n, self.x, self.alpha)
+    def get_objective(self, n, x):
+        return score_minimize_node_delay_and_utilization(self.data, n, x, self.alpha)
 
     def score_local(self, f, j):
         alloc_matrix = getattr(self.data, "old_allocations_matrix", None)

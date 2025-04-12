@@ -50,7 +50,8 @@ for file in os.listdir(directory):
                 "score_step2": score2,
                 "num_allocated": total_allocated,
                 "processing_time": processing_time,
-                "response_time": response_time
+                "response_time": response_time,
+                "cpu_allocations": cpu_allocations
             })
 
             # Salva assegnazioni funzione → nodo
@@ -58,7 +59,7 @@ for file in os.listdir(directory):
                 for node, allocated in node_map.items():
                     if allocated:
                         key = (method, test_case)
-                        alloc_matrix.setdefault(key, {})[fn] = node
+                        alloc_matrix.setdefault(key, {}).setdefault(fn, set()).add(node)
 
 # Creazione del DataFrame
 df = pd.DataFrame(results)
@@ -117,17 +118,55 @@ print(pivot_proc_time.to_string(index=False))
 print("\n[🌐] Tempo totale di risposta (response_time)")
 print(pivot_resp_time.to_string(index=False))
 
+import pandas as pd
 
-# Analisi nodi usati per ciascuna funzione
-cpu_routing_rules = data.get("cpu_routing_rules", {})
-func_to_nodes = {}
+def extract_allocated_nodes(cpu_allocations):
+    data = []
+    for fn, node_dict in cpu_allocations.items():
+        allocated_nodes = sorted(int(node.split("_")[1]) for node, is_alloc in node_dict.items() if is_alloc)
+        node_str = ",".join(map(str, allocated_nodes)) if allocated_nodes else "-"
+        data.append({
+            "Function": fn,
+            "Allocated Nodes": node_str,
+            "Count": len(allocated_nodes)
+        })
 
-for node, fn_rules in cpu_routing_rules.items():
-    for fn, dests in fn_rules.items():
-        if fn not in func_to_nodes:
-            func_to_nodes[fn] = set()
-        func_to_nodes[fn].update(dests.keys())
+    return pd.DataFrame(data)
 
+import pandas as pd
+
+def build_allocation_table_by_function(alloc_matrix, suffix):
+    rows = []
+    all_functions = set()
+
+    for (method, test_case), fn_allocs in alloc_matrix.items():
+        if method.endswith(suffix):
+            row_key = f"{method} case_{test_case}"
+            row = {"id": row_key}
+            row["test_case_num"] = test_case
+            row["method"] = method
+            for fn_full, nodes in fn_allocs.items():
+                fn = fn_full.split("/")[-1]
+                all_functions.add(fn)
+                node_list = sorted(nodes)
+                row[fn] = ",".join(node_list) if node_list else "-"
+            rows.append(row)
+
+    df = pd.DataFrame(rows).set_index("id")
+
+    for fn in sorted(all_functions):
+        if fn not in df.columns:
+            df[fn] = "-"
+
+    ordered_cols = [f"fn_{i}" for i in range(100) if f"fn_{i}" in df.columns]
+    df = df[["test_case_num", "method"] + ordered_cols]
+    df = df.fillna("-")
+
+    # Ordina prima per numero di test case, poi per nome metodo
+    df = df.sort_values(["test_case_num", "method"])
+    df = df.drop(columns=["test_case_num", "method"])
+
+    return df
 
 # Raggruppamento per famiglie di metodi
 for suffix in ["MinDelay", "MinDelayAndUtilization", "MinUtilization"]:
@@ -157,31 +196,11 @@ for suffix in ["MinDelay", "MinDelayAndUtilization", "MinUtilization"]:
         print(f"\n[🌐] Tempo di risposta - Metodo {suffix}")
         print(pivot_resp_time[['test_case'] + matching_cols_resp].to_string(index=False))
 
-    print(f"\n[🧮] Numero di nodi usati per ogni funzione - Gruppo {suffix}")
-    dfs_fn = []
-    for (method, test_case), alloc in alloc_matrix.items():
-        if method.endswith(suffix):
-            df_tmp = generate_function_node_count_table(method, test_case)
-            dfs_fn.append(df_tmp)
+    df_fn_alloc_table = build_allocation_table_by_function(alloc_matrix, suffix)
 
-    if dfs_fn:
-        fn_node_count_df = pd.concat(dfs_fn).fillna(0).astype(int)
+    print(f"\n[📋] Tabella funzione → nodi per il gruppo {suffix}")
+    print(df_fn_alloc_table.to_string())
 
-        # Estrai il numero di test_case e metodo per ordinare
-        fn_node_count_df = fn_node_count_df.reset_index()
-        fn_node_count_df["test_case"] = fn_node_count_df["index"].str.extract(r'_case(\d+)').astype(int)
-
-        # (Opzionale) ordina anche per nome metodo per gruppi leggibili
-        fn_node_count_df["method"] = fn_node_count_df["index"].str.extract(r'^(.*?)_case')
-
-        # Ordina prima per test_case, poi per metodo (se vuoi)
-        fn_node_count_df = fn_node_count_df.sort_values(["test_case", "method"])
-
-        # Ripristina l'indice originale
-        fn_node_count_df = fn_node_count_df.set_index("index")
-        fn_node_count_df = fn_node_count_df.drop(columns=["test_case", "method"])
-
-        print(fn_node_count_df.to_string())
 
 # Salvataggio opzionale in CSV
 pivot_scores_step1.to_csv("score_step1.csv", index=False)
@@ -198,7 +217,8 @@ test_case_labels = {
     3: "3 - 1 nodo, 2 funzioni, una allocata",
     4: "4 - 1 nodo, 2 funzioni, entrambe allocate",
     5: "5 - molti nodi, molte funzioni, nessuna allocata",
-    6: "6 - molti nodi, molte funzioni, tutte allocate"
+    6: "6 - molti nodi, molte funzioni, tutte allocate",
+    7: "7 - molti molti nodi, molte molte funzioni"
 }
 
 # Colori coerenti per gruppi
@@ -241,19 +261,28 @@ def plot_grouped_bars(df, suffix, ylabel, title, log_scale=False):
     plt.tight_layout()
     plt.show()
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def plot_allocation_heatmap(alloc_matrix, suffix):
+    df = build_allocation_table_by_function(alloc_matrix, suffix)
+    df_count = df.applymap(lambda x: 0 if x == "-" else len(x.split(",")))
+
+    plt.figure(figsize=(14, max(6, len(df_count) * 0.4)))
+    sns.heatmap(df_count, annot=True, fmt="d", cmap="YlGnBu", cbar_kws={"label": "Numero di nodi"})
+    plt.title(f"Heatmap: Numero di nodi per funzione - {suffix}", fontsize=14)
+    plt.xlabel("Funzione")
+    plt.ylabel("Metodo + Test Case")
+    plt.tight_layout()
+    plt.show()
+
 
 # Plot per ciascun gruppo e metrica
-#for suffix in ["MinDelay", "MinDelayAndUtilization", "MinUtilization"]:
+for suffix in ["MinDelay", "MinDelayAndUtilization", "MinUtilization"]:
+    plot_allocation_heatmap(alloc_matrix, suffix)
+
     #plot_grouped_bars(pivot_proc_time, suffix, "Tempo di elaborazione (ms)", "Tempo di elaborazione")
-    #plot_grouped_bars(pivot_proc_time, suffix, "Tempo di elaborazione (ms)", "Tempo di elaborazione (scala log)", log_scale=True)
+    plot_grouped_bars(pivot_proc_time, suffix, "Tempo di elaborazione (ms)", "Tempo di elaborazione (scala log)", log_scale=True)
     #plot_grouped_bars(pivot_resp_time, suffix, "Tempo di risposta (ms)", "Tempo di risposta")
     #plot_grouped_bars(pivot_resp_time, suffix, "Tempo di risposta (ms)", "Tempo di risposta (scala log)", log_scale=True)
 
-    # 🔥 Heatmap
-    # plt.figure(figsize=(12, max(6, len(node_count_df) * 0.5)))
-    # sns.heatmap(node_count_df, annot=True, fmt="d", cmap="YlGnBu", cbar_kws={"label": "N. funzioni"})
-    # plt.title(f"Heatmap nodo x allocazione funzione - {suffix}", fontsize=14)
-    # plt.xlabel("Nodo")
-    # plt.ylabel("Metodo + Test Case")
-    # plt.tight_layout()
-    # plt.show()

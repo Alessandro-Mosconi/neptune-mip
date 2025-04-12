@@ -145,7 +145,7 @@ def setup_custom_workload_on_source(data):
 
     for f in range(half_f):
         for i in range(half_n):
-            data.workload_on_source_matrix[f][i] = 10
+            data.workload_on_source_matrix[f][i] = 1
 
 
 def setup_runtime_data(data, input):

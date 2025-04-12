@@ -32,7 +32,7 @@ class EfttcBase(Solver):
             return convert_x_matrix(self.step2_x, self.data.nodes, self.data.functions), convert_c_matrix(self.step2_c, self.data.functions, self.data.nodes)
         else:
             return convert_x_matrix(self.step1_x, self.data.nodes, self.data.functions), convert_c_matrix(self.step1_c, self.data.functions, self.data.nodes)
-          
+
     def score(self):
         return { "step1": self.step1.score(), "step2": -1 } #self.step2_delete.score() if self.step2_delete_solved else self.step2_create.score() }
 

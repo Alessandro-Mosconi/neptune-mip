@@ -1,22 +1,31 @@
+import os
 import pprint
 import json
 import time
 
 import requests
 
+folder = "allocation_algorithm_test/"
+
+for filename in os.listdir(folder):
+    file_path = os.path.join(folder, filename)
+    if os.path.isfile(file_path):
+        os.remove(file_path)
+        print(f"🗑️ File rimosso: {file_path}")
+
 for solver_type in [
     "EfttcMinDelay",
-    "EfttcMinUtilization",
-    # "EfttcMinDelayAndUtilization",
+    #"EfttcMinUtilization",
+    #"EfttcMinDelayAndUtilization",
     #  "EFTTCMultiPathMinDelay",
     #  "EFTTCMultiPathMinUtilization",
     #  "EFTTCMultiPathMinDelayAndUtilization",
     #"NeptuneWithEFTTCMinDelay",
     #"NeptuneWithEFTTCMinUtilization",
     #"NeptuneWithEFTTCMinDelayAndUtilization",
-    # "NeptuneMinDelayAndUtilization",
-    # "NeptuneMinDelay",
-    # "NeptuneMinUtilization",
+    #"NeptuneMinDelayAndUtilization",
+    "NeptuneMinDelay",
+    #"NeptuneMinUtilization",
     #"VSVBP",
     #"Criticality",
     #"CriticalityHeuristic",
@@ -312,14 +321,40 @@ for solver_type in [
             "with_db": False,
             "community": "community-test",
             "namespace": "namespace-test",
-            "node_names": [f"node_{i}" for i in range(20)],
-            "node_memories": [100 for i in range(20)],
-            "node_cores": [100 for i in range(20)],
+            "node_names": [f"node_{i}" for i in range(50)],
+            "node_memories": [100 for i in range(50)],
+            "node_cores": [100 for i in range(50)],
             "gpu_node_names": [],
             "gpu_node_memories": [],
-            "function_names": [f"ns/fn_{i}" for i in range(10)],
-            "function_memories": [30 for i in range(10)],
-            "function_max_delays": [100 for i in range(10)],
+            "function_names": [f"ns/fn_{i}" for i in range(15)],
+            "function_memories": [30 for i in range(15)],
+            "function_max_delays": [100 for i in range(15)],
+            "gpu_function_names": [],
+            "gpu_function_memories": [],
+            "actual_cpu_allocations": {
+            },
+            "actual_gpu_allocations": {
+            }
+        },
+        # Many maby node, many many functions
+        # None of them were allocated
+        {
+            "case": 8,
+            "solver": {
+                "type": solver_type,
+                "args": {"alpha": 0.0, "verbose": False}
+            },
+            "with_db": False,
+            "community": "community-test",
+            "namespace": "namespace-test",
+            "node_names": [f"node_{i}" for i in range(50)],
+            "node_memories": [100 for i in range(50)],
+            "node_cores": [100 for i in range(50)],
+            "gpu_node_names": [],
+            "gpu_node_memories": [],
+            "function_names": [f"ns/fn_{i}" for i in range(25)],
+            "function_memories": [30 for i in range(25)],
+            "function_max_delays": [100 for i in range(25)],
             "gpu_function_names": [],
             "gpu_function_memories": [],
             "actual_cpu_allocations": {
@@ -330,6 +365,8 @@ for solver_type in [
     ]
 
     for i, input_request in enumerate(inputs):
+        if i>=7:
+            break
         start_time = time.time()
         response = requests.request(method='get', url="http://localhost:5000/", json=input_request)
         elapsed_time = time.time() - start_time
@@ -337,6 +374,7 @@ for solver_type in [
         print("=" * 40)
         print(f"Solver: {solver_type}")
         print("Status:", response.status_code)
+
 
         output_file = f"allocation_algorithm_test/output_{solver_type}_case{i}.json"
 
