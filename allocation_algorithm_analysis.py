@@ -152,11 +152,14 @@ def build_allocation_table_by_function(alloc_matrix, suffix):
                 row[fn] = ",".join(node_list) if node_list else "-"
             rows.append(row)
 
-    df = pd.DataFrame(rows).set_index("id")
+    df = pd.DataFrame(rows)
 
+    # Aggiungi colonne mancanti prima di settare l'indice
     for fn in sorted(all_functions):
         if fn not in df.columns:
             df[fn] = "-"
+
+    df = df.set_index("id")
 
     ordered_cols = [f"fn_{i}" for i in range(100) if f"fn_{i}" in df.columns]
     df = df[["test_case_num", "method"] + ordered_cols]
@@ -196,10 +199,11 @@ for suffix in ["MinDelay", "MinDelayAndUtilization", "MinUtilization"]:
         print(f"\n[🌐] Tempo di risposta - Metodo {suffix}")
         print(pivot_resp_time[['test_case'] + matching_cols_resp].to_string(index=False))
 
-    df_fn_alloc_table = build_allocation_table_by_function(alloc_matrix, suffix)
+    if any(method.endswith(suffix) for (method, test_case) in alloc_matrix):
+        df_fn_alloc_table = build_allocation_table_by_function(alloc_matrix, suffix)
 
-    print(f"\n[📋] Tabella funzione → nodi per il gruppo {suffix}")
-    print(df_fn_alloc_table.to_string())
+        print(f"\n[📋] Tabella funzione → nodi per il gruppo {suffix}")
+        print(df_fn_alloc_table.to_string())
 
 
 # Salvataggio opzionale in CSV
@@ -279,10 +283,10 @@ def plot_allocation_heatmap(alloc_matrix, suffix):
 
 # Plot per ciascun gruppo e metrica
 for suffix in ["MinDelay", "MinDelayAndUtilization", "MinUtilization"]:
-    plot_allocation_heatmap(alloc_matrix, suffix)
+    #plot_allocation_heatmap(alloc_matrix, suffix)
 
-    #plot_grouped_bars(pivot_proc_time, suffix, "Tempo di elaborazione (ms)", "Tempo di elaborazione")
-    plot_grouped_bars(pivot_proc_time, suffix, "Tempo di elaborazione (ms)", "Tempo di elaborazione (scala log)", log_scale=True)
+    plot_grouped_bars(pivot_proc_time, suffix, "Tempo di elaborazione (ms)", "Tempo di elaborazione")
+    #plot_grouped_bars(pivot_proc_time, suffix, "Tempo di elaborazione (ms)", "Tempo di elaborazione (scala log)", log_scale=True)
     #plot_grouped_bars(pivot_resp_time, suffix, "Tempo di risposta (ms)", "Tempo di risposta")
     #plot_grouped_bars(pivot_resp_time, suffix, "Tempo di risposta (ms)", "Tempo di risposta (scala log)", log_scale=True)
 

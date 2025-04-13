@@ -1,4 +1,5 @@
 import copy
+from datetime import datetime
 
 from .utils import *
 from ..solver import Solver
@@ -140,7 +141,18 @@ class EfttcStepBase(Solver):
                 self.update_x_from_c()
 
                 if 'min_delay' in self.objective:
-                    self.evaluate_cycle_removals(cycle, remaining_functions, remaining_nodes)
+
+                    time = datetime.now()
+                    for f, _ in cycle:
+                        if(self.find_best_node_by_delay_improvement(f, remaining_nodes, self.data) is not None):
+                            print("✅ Funzione può essere migliorata")
+                        else:
+                            print("❌ Funzione non può essere migliorata")
+                            remaining_functions.remove(f)
+                    #self.evaluate_cycle_removals(cycle, remaining_functions, remaining_nodes)
+
+                    elapsedTime = datetime.now() - time
+                    print(f"⏱️ Tempo per capire se rimuovere la funzione: {elapsedTime.total_seconds()} secondi")
                 else:
                     for f, _ in cycle:
                         remaining_functions.discard(f)
@@ -329,6 +341,44 @@ class EfttcStepBase(Solver):
             for j in active_nodes:
                 x[(i, f, j)]["val"] = val if j in best_nodes else 0.0
 
+    def find_best_node_by_delay_improvement(self, f, candidate_nodes, data):
+        if not candidate_nodes:
+            return None
+
+        # Converti in array NumPy (serve per indexing e maschere)
+        candidate_nodes = np.array(list(candidate_nodes), dtype=int)
+
+        # --- STEP 1: Filtra i nodi che NON hanno già f allocata usando mask boolean ---
+        # Costruisci un array booleano dove mask[j] = True se self.c[(f, j)]["val"] è False
+        is_unallocated = np.array([
+            not self.c.get((f, j), {}).get("val", False) for j in candidate_nodes
+        ])
+
+        # Applica la maschera per ottenere solo i nodi validi
+        candidate_nodes = candidate_nodes[is_unallocated]
+
+        if candidate_nodes.size == 0:
+            return None
+
+        # --- STEP 2: Check workload della funzione ---
+        workload_f = data.workload_matrix[f]
+        if not np.any(workload_f):
+            return None
+
+        # --- STEP 3: Calcolo vettoriale del contributo al delay ---
+        delay_matrix = data.node_delay_matrix
+        candidate_delays = delay_matrix[:, candidate_nodes]
+
+        scores = workload_f @ candidate_delays
+        best_idx = np.argmin(scores)
+        best_score = scores[best_idx]
+        best_node = candidate_nodes[best_idx]
+
+        if np.isclose(best_score, 0.0):
+            return None
+
+        return best_node
+
     def evaluate_cycle_removals(self, cycle, remaining_functions, remaining_nodes):
         current_score = self.score_param(self.n, self.x)
         print(f"\n🔍 Valutazione collettiva per rimozione funzioni (score attuale: {current_score})")
@@ -337,6 +387,8 @@ class EfttcStepBase(Solver):
 
         for f, _ in cycle:
             # Snapshot una volta sola per f
+            #print time
+            time = datetime.now()
             base_x = {k: {"name": v["name"], "val": v["val"]} for k, v in self.x.items()}
             base_c = {k: {"name": v["name"], "val": v["val"]} for k, v in self.c.items()}
             base_n = (
@@ -344,6 +396,10 @@ class EfttcStepBase(Solver):
                 if hasattr(self, "n")
                 else {k: {"name": f"n[{k}]", "val": False} for k in range(len(self.data.nodes))}
             )
+            elapsedTime = datetime.now() - time
+            print(f"⏱️ Tempo di snapshot: {elapsedTime.total_seconds()} secondi")
+
+
 
             for j in remaining_nodes:
                 if (f, j) in self.invalid_pairs or self.c[(f, j)]["val"]:
@@ -352,16 +408,29 @@ class EfttcStepBase(Solver):
                     continue
 
                 # Copie leggere da base (solo quello che serve modificare)
+                time = datetime.now()
                 c = base_c.copy()
+                elapsedTime = datetime.now() - time
+                print(f"⏱️ Tempo per copiare c: {elapsedTime.total_seconds()} secondi")
+
                 c[(f, j)] = {"name": c[(f, j)]["name"], "val": True}
 
+                time = datetime.now()
                 n = base_n.copy()
                 self.change_n_one(n, c, j)
+                elapsedTime = datetime.now() - time
+                print(f"⏱️ Tempo per copiare e aggiornare n: {elapsedTime.total_seconds()} secondi")
 
+                time = datetime.now()
                 x = base_x.copy()
                 self.change_x_one(x, c, f)
+                elapsedTime = datetime.now() - time
+                print(f"⏱️ Tempo per copiare e aggiornare x: {elapsedTime.total_seconds()} secondi")
 
+                time = datetime.now()
                 new_score = self.score_param(n, x)
+                elapsedTime = datetime.now() - time
+                print(f"⏱️ Tempo per ccalcolare lo score: {elapsedTime.total_seconds()} secondi")
                 print(f"✅ Tentativo: funzione {f} su nodo {j} → score: {new_score}")
 
                 if new_score < current_score - 1e-6:

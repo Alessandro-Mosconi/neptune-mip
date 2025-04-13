@@ -15,17 +15,17 @@ for filename in os.listdir(folder):
 
 for solver_type in [
     "EfttcMinDelay",
-    #"EfttcMinUtilization",
-    #"EfttcMinDelayAndUtilization",
+    "EfttcMinUtilization",
+    "EfttcMinDelayAndUtilization",
     #  "EFTTCMultiPathMinDelay",
     #  "EFTTCMultiPathMinUtilization",
     #  "EFTTCMultiPathMinDelayAndUtilization",
     #"NeptuneWithEFTTCMinDelay",
     #"NeptuneWithEFTTCMinUtilization",
     #"NeptuneWithEFTTCMinDelayAndUtilization",
-    #"NeptuneMinDelayAndUtilization",
+    "NeptuneMinDelayAndUtilization",
     "NeptuneMinDelay",
-    #"NeptuneMinUtilization",
+    "NeptuneMinUtilization",
     #"VSVBP",
     #"Criticality",
     #"CriticalityHeuristic",
@@ -365,8 +365,8 @@ for solver_type in [
     ]
 
     for i, input_request in enumerate(inputs):
-        if i>=7:
-            break
+        #if i>=7:
+        #    break
         start_time = time.time()
         response = requests.request(method='get', url="http://localhost:5000/", json=input_request)
         elapsed_time = time.time() - start_time
