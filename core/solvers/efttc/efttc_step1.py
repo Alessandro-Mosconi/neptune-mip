@@ -128,6 +128,7 @@ class EfttcStepBase(Solver):
             print("✔️ Ciclo trovato, assegno")
             hasSuccess = self.assign_cycle(cycle)
             self.update_n_from_c()
+            self.update_x_from_c()
 
             if not hasSuccess:
                 print("⛔️ Alcune assegnazioni non sono valide")
@@ -137,25 +138,6 @@ class EfttcStepBase(Solver):
 
             # Verifica i vincoli globali
             if self.get_constraints():
-
-                self.update_x_from_c()
-
-                if 'min_delay' in self.objective:
-
-                    time = datetime.now()
-                    for f, _ in cycle:
-                        if(self.find_best_node_by_delay_improvement(f, remaining_nodes, self.data) is not None):
-                            print("✅ Funzione può essere migliorata")
-                        else:
-                            print("❌ Funzione non può essere migliorata")
-                            remaining_functions.remove(f)
-                    #self.evaluate_cycle_removals(cycle, remaining_functions, remaining_nodes)
-
-                    elapsedTime = datetime.now() - time
-                    print(f"⏱️ Tempo per capire se rimuovere la funzione: {elapsedTime.total_seconds()} secondi")
-                else:
-                    for f, _ in cycle:
-                        remaining_functions.discard(f)
 
                 for _, j in cycle:
                     mem_used = sum(
@@ -174,9 +156,21 @@ class EfttcStepBase(Solver):
                         print("✅ Ciclo trovato e variabili aggiornate")
                         for f, j in cycle:
                             self.invalid_pairs.add((f, j))
+
+                        if 'min_delay' in self.objective:
+
+                            for f, _ in cycle:
+                                if (self.find_best_node_by_delay_improvement(f, remaining_nodes,  self.data, self.invalid_pairs) is not None):
+                                    print("✅ Funzione può essere migliorata")
+                                else:
+                                    print("❌ Funzione non può essere migliorata")
+                                    remaining_functions.remove(f)
+                            # self.evaluate_cycle_removals(cycle, remaining_functions, remaining_nodes)
+                        else:
+                            for f, _ in cycle:
+                                remaining_functions.discard(f)
+
                         self.snapshot_vars()
-
-
             else:
                 print("⚠️ Ciclo trovato ma viola i vincoli globali. Scartato.")
                 self.restore_vars(snapshot)
@@ -270,7 +264,6 @@ class EfttcStepBase(Solver):
                 ]
 
                 if not active_nodes:
-                    # Nessuna istanza attiva per f, ignoro questa richiesta
                     continue
 
                 # Calcola il delay minimo per (i, f)
@@ -341,42 +334,48 @@ class EfttcStepBase(Solver):
             for j in active_nodes:
                 x[(i, f, j)]["val"] = val if j in best_nodes else 0.0
 
-    def find_best_node_by_delay_improvement(self, f, candidate_nodes, data):
+    def find_best_node_by_delay_improvement(self, f, candidate_nodes, data, invalid_pairs):
         if not candidate_nodes:
             return None
 
-        # Converti in array NumPy (serve per indexing e maschere)
-        candidate_nodes = np.array(list(candidate_nodes), dtype=int)
+        # Step 0: Filtra nodi non validi o già usati
+        useful_candidates = []
+        for j in candidate_nodes:
+            if self.c.get((f, j), {}).get("val", False):
+                continue
+            if (f, j) in invalid_pairs:
+                continue
+            useful_candidates.append(j)
 
-        # --- STEP 1: Filtra i nodi che NON hanno già f allocata usando mask boolean ---
-        # Costruisci un array booleano dove mask[j] = True se self.c[(f, j)]["val"] è False
-        is_unallocated = np.array([
-            not self.c.get((f, j), {}).get("val", False) for j in candidate_nodes
-        ])
-
-        # Applica la maschera per ottenere solo i nodi validi
-        candidate_nodes = candidate_nodes[is_unallocated]
-
-        if candidate_nodes.size == 0:
+        if not useful_candidates:
             return None
 
-        # --- STEP 2: Check workload della funzione ---
+        # Step 1: Considera solo i nodi migliori per i nodi sorgente `i` con workload > 0
+        useful_nodes = set()
+        for i in range(len(data.nodes)):
+            if data.workload_matrix[f, i] > 0:
+                delays = data.node_delay_matrix[i]
+                min_delay = np.min(delays)
+                best_js = [j for j in useful_candidates if delays[j] == min_delay]
+                useful_nodes.update(best_js)
+
+        if not useful_nodes:
+            return None
+
+        # Step 2: Calcolo vettoriale dei punteggi
+        useful_nodes = list(useful_nodes)
         workload_f = data.workload_matrix[f]
-        if not np.any(workload_f):
-            return None
+        delay_matrix = data.node_delay_matrix[:, useful_nodes]
+        scores = workload_f @ delay_matrix
 
-        # --- STEP 3: Calcolo vettoriale del contributo al delay ---
-        delay_matrix = data.node_delay_matrix
-        candidate_delays = delay_matrix[:, candidate_nodes]
-
-        scores = workload_f @ candidate_delays
         best_idx = np.argmin(scores)
         best_score = scores[best_idx]
-        best_node = candidate_nodes[best_idx]
+        best_node = useful_nodes[best_idx]
 
         if np.isclose(best_score, 0.0):
             return None
 
+        print("🧠 Nodo migliore per f=", f, "→", best_node, "con score delay:", best_score)
         return best_node
 
     def evaluate_cycle_removals(self, cycle, remaining_functions, remaining_nodes):
@@ -496,6 +495,7 @@ class EfttcStepBase(Solver):
                     self.invalid_pairs.add((f, j))
                     continue
                 self.c[(f, j)]["val"] = True
+                self.change_x_one(self.x, self.c, f)
                 print(f"✅ Assegnata funzione {f} al nodo {j} via ciclo TTC")
                 success = True
         return success
@@ -534,12 +534,16 @@ class EfttcStep1CPUBase(EfttcStepBase):
         ok = super().get_constraints()
         if not ok:
             print("❌ Vincolo fallito: super().get_constraints()")
-
+        '''
+        ok2 = constrain_handle_required_requests(self.data, self.x)
+        if not ok2:
+            print("❌ Vincolo fallito: constrain_handle_required_requests")
+        '''
         ok3 = constrain_CPU_usage(self.data, self.x)
         if not ok3:
             print("❌ Vincolo fallito: constrain_CPU_usage")
 
-        return ok and ok3
+        return ok  and ok3
 
 
 class EfttcStep1CPUMinUtilization(EfttcStep1CPUBase):
@@ -607,6 +611,8 @@ class EfttcStep1CPUMinUtilization(EfttcStep1CPUBase):
         x, c = super().results()
         n = output_n(self.data, self.n)
         self.data.prev_n = n
+        self.data.prev_x = x
+        self.data.prev_c = c
         #print("Step 1 - n:", n, sep='\n')
         return x, c
 

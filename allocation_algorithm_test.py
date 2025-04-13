@@ -20,9 +20,9 @@ for solver_type in [
     #  "EFTTCMultiPathMinDelay",
     #  "EFTTCMultiPathMinUtilization",
     #  "EFTTCMultiPathMinDelayAndUtilization",
-    #"NeptuneWithEFTTCMinDelay",
-    #"NeptuneWithEFTTCMinUtilization",
-    #"NeptuneWithEFTTCMinDelayAndUtilization",
+    "NeptuneWithEFTTCMinDelay",
+    "NeptuneWithEFTTCMinUtilization",
+    "NeptuneWithEFTTCMinDelayAndUtilization",
     "NeptuneMinDelayAndUtilization",
     "NeptuneMinDelay",
     "NeptuneMinUtilization",
@@ -310,7 +310,7 @@ for solver_type in [
             "actual_gpu_allocations": {
             }
         },
-        # Many maby node, many many functions
+        # 50 node, 20 functions
         # None of them were allocated
         {
             "case": 7,
@@ -326,9 +326,9 @@ for solver_type in [
             "node_cores": [100 for i in range(50)],
             "gpu_node_names": [],
             "gpu_node_memories": [],
-            "function_names": [f"ns/fn_{i}" for i in range(15)],
-            "function_memories": [30 for i in range(15)],
-            "function_max_delays": [100 for i in range(15)],
+            "function_names": [f"ns/fn_{i}" for i in range(20)],
+            "function_memories": [30 for i in range(20)],
+            "function_max_delays": [100 for i in range(20)],
             "gpu_function_names": [],
             "gpu_function_memories": [],
             "actual_cpu_allocations": {
@@ -336,7 +336,7 @@ for solver_type in [
             "actual_gpu_allocations": {
             }
         },
-        # Many maby node, many many functions
+        # 50 node, 5 functions
         # None of them were allocated
         {
             "case": 8,
@@ -352,9 +352,35 @@ for solver_type in [
             "node_cores": [100 for i in range(50)],
             "gpu_node_names": [],
             "gpu_node_memories": [],
-            "function_names": [f"ns/fn_{i}" for i in range(25)],
-            "function_memories": [30 for i in range(25)],
-            "function_max_delays": [100 for i in range(25)],
+            "function_names": [f"ns/fn_{i}" for i in range(5)],
+            "function_memories": [30 for i in range(5)],
+            "function_max_delays": [100 for i in range(5)],
+            "gpu_function_names": [],
+            "gpu_function_memories": [],
+            "actual_cpu_allocations": {
+            },
+            "actual_gpu_allocations": {
+            }
+        },
+        # 25 node, 20 functions
+        # None of them were allocated
+        {
+            "case": 8,
+            "solver": {
+                "type": solver_type,
+                "args": {"alpha": 0.0, "verbose": False}
+            },
+            "with_db": False,
+            "community": "community-test",
+            "namespace": "namespace-test",
+            "node_names": [f"node_{i}" for i in range(25)],
+            "node_memories": [100 for i in range(25)],
+            "node_cores": [100 for i in range(25)],
+            "gpu_node_names": [],
+            "gpu_node_memories": [],
+            "function_names": [f"ns/fn_{i}" for i in range(20)],
+            "function_memories": [30 for i in range(20)],
+            "function_max_delays": [100 for i in range(20)],
             "gpu_function_names": [],
             "gpu_function_memories": [],
             "actual_cpu_allocations": {
@@ -365,8 +391,7 @@ for solver_type in [
     ]
 
     for i, input_request in enumerate(inputs):
-        #if i>=7:
-        #    break
+
         start_time = time.time()
         response = requests.request(method='get', url="http://localhost:5000/", json=input_request)
         elapsed_time = time.time() - start_time
@@ -380,7 +405,9 @@ for solver_type in [
 
         try:
             response_json = response.json()
-            response_json["response_time"] = elapsed_time  # Aggiungi tempo di risposta
+            response_json["response_time"] = elapsed_time
+            json.dumps(input_request)
+            response_json["input"] = input_request
             pprint.pprint(response_json)
             with open(output_file, 'w') as f:
                 json.dump(response_json, f, indent=4)

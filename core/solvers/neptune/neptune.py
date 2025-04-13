@@ -1,6 +1,7 @@
 from .neptune_step2 import *
 from .utils.output import convert_x_matrix, convert_c_matrix
-#from core.solvers.efttc.ef_ttc_solver import *
+
+from core.solvers.efttc import *
 
 
 class NeptuneBase(Solver):
@@ -63,11 +64,11 @@ class NeptuneMinUtilization(NeptuneBase):
             NeptuneStep2MinUtilization(mode="create", **kwargs),
             **kwargs
             )
-'''
+
 class NeptuneWithEFTTCMinDelay(NeptuneBase):
     def __init__(self, **kwargs):
         super().__init__(
-            step1=EF_TTC_MinDelay(**kwargs),
+            step1=EfttcStep1CPUMinDelay(**kwargs),
             step2_delete=NeptuneStep2MinDelayAndUtilization(mode="delete", **kwargs),
             step2_create=NeptuneStep2MinDelayAndUtilization(mode="create", **kwargs),
             **kwargs
@@ -76,7 +77,7 @@ class NeptuneWithEFTTCMinDelay(NeptuneBase):
 class NeptuneWithEFTTCMinUtilization(NeptuneBase):
     def __init__(self, **kwargs):
         super().__init__(
-            step1=EF_TTC_MinUtilization(**kwargs),
+            step1=EfttcStep1CPUMinUtilization(**kwargs),
             step2_delete=NeptuneStep2MinDelayAndUtilization(mode="delete", **kwargs),
             step2_create=NeptuneStep2MinDelayAndUtilization(mode="create", **kwargs),
             **kwargs
@@ -85,9 +86,8 @@ class NeptuneWithEFTTCMinUtilization(NeptuneBase):
 class NeptuneWithEFTTCMinDelayAndUtilization(NeptuneBase):
     def __init__(self, alpha=0.5, **kwargs):
         super().__init__(
-            step1=EF_TTC_MinDelayAndUtilization(alpha=alpha, **kwargs),
+            step1=EfttcStep1CPUMinDelayAndUtilization(alpha=alpha, **kwargs),
             step2_delete=NeptuneStep2MinDelayAndUtilization(mode="delete", **kwargs),
             step2_create=NeptuneStep2MinDelayAndUtilization(mode="create", **kwargs),
             **kwargs
         )
-'''

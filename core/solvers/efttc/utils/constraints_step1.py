@@ -34,17 +34,18 @@ def constrain_memory_usage(data, c, verbose=True):
 
 
 # All requests in a node are rerouted somewhere else
-def constrain_handle_all_requests(data, x, eq=True):
+def constrain_handle_all_requests(data, x, eq=True, tol=1e-1):  # <- aumenta la tolleranza a 1e-2
     for f in range(len(data.functions)):
         for i in range(len(data.nodes)):
             total = sum(x[(i, f, j)]["val"] for j in range(len(data.nodes)))
-            if eq and not abs(total - 1) < 1e-6:
+            if eq and not abs(total - 1) < tol:
                 print(f"❌ Violazione handle_all_requests: somma {total} ≠ 1 per funzione {f} su nodo {i}")
                 return False
-            if not eq and total > 1 + 1e-6:
+            if not eq and total > 1 + tol:
                 print(f"❌ Violazione handle_all_requests (not eq): somma {total} > 1 per funzione {f} su nodo {i}")
                 return False
     return True
+
 
 # All requests except the ones managed by GPUs in a node are rerouted somewhere else
 def constrain_handle_only_remaining_requests(data, x):

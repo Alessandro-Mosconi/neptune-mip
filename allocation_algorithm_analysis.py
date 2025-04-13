@@ -222,7 +222,7 @@ test_case_labels = {
     4: "4 - 1 nodo, 2 funzioni, entrambe allocate",
     5: "5 - molti nodi, molte funzioni, nessuna allocata",
     6: "6 - molti nodi, molte funzioni, tutte allocate",
-    7: "7 - molti molti nodi, molte molte funzioni"
+    7: "7 - molti molti nodi, molte molte funzioni, nessuna allocata"
 }
 
 # Colori coerenti per gruppi
@@ -285,8 +285,8 @@ def plot_allocation_heatmap(alloc_matrix, suffix):
 for suffix in ["MinDelay", "MinDelayAndUtilization", "MinUtilization"]:
     #plot_allocation_heatmap(alloc_matrix, suffix)
 
-    plot_grouped_bars(pivot_proc_time, suffix, "Tempo di elaborazione (ms)", "Tempo di elaborazione")
-    #plot_grouped_bars(pivot_proc_time, suffix, "Tempo di elaborazione (ms)", "Tempo di elaborazione (scala log)", log_scale=True)
+    #plot_grouped_bars(pivot_proc_time, suffix, "Tempo di elaborazione (ms)", "Tempo di elaborazione")
+    plot_grouped_bars(pivot_proc_time, suffix, "Tempo di elaborazione (ms)", "Tempo di elaborazione (scala log)", log_scale=True)
     #plot_grouped_bars(pivot_resp_time, suffix, "Tempo di risposta (ms)", "Tempo di risposta")
     #plot_grouped_bars(pivot_resp_time, suffix, "Tempo di risposta (ms)", "Tempo di risposta (scala log)", log_scale=True)
 

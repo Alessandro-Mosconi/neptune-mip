@@ -52,7 +52,7 @@ def check_input(schedule_input):
 
     # assert "type" in schedule_input["solver"]
     # assert schedule_input["solver"]["type"] in solvers
-     
+
     functions = schedule_input.get('function_names', [])
     function_memories = schedule_input.get('function_memories', [])
     gpu_functions = schedule_input.get('gpu_function_names', [])
@@ -107,7 +107,7 @@ def data_to_solver_input(input, workload_coeff, with_db=True):
     data.old_allocations_matrix = np.array(aux_data.old_cpu_allocations)
     data.core_per_req_matrix = np.array(aux_data.core_per_req_matrix)
     setup_budget_data(data)
-    
+
     return data
 
 
@@ -122,7 +122,7 @@ def setup_community_data(input, data):
     data.gpu_nodes = input.get('gpu_node_names', [])
     data.gpu_nodes_set = set(data.gpu_nodes)
     data.gpu_nodes_mask = np.array([n in data.gpu_nodes_set for n in data.nodes])
-    
+
     assert set(data.gpu_functions).issubset(set(data.functions))
     assert set(data.gpu_nodes).issubset(set(data.nodes))
 
@@ -152,10 +152,10 @@ def setup_runtime_data(data, input):
     node_delay_matrix = input.get('node_delay_matrix', None)
     if node_delay_matrix:
         data.node_delay_matrix = node_delay_matrix
-    else: 
+    else:
         data.node_delay_matrix = [[1 if s != d else 0 for s in data.nodes] for d in data.nodes]
     data.gpu_node_delay_matrix = [[1 if s != d else 0 for s in data.nodes] for d in data.gpu_nodes]
-    
+
     workload_on_source_matrix = input.get('workload_on_source_matrix', None)
     if workload_on_source_matrix:
          data.workload_on_source_matrix = np.array(workload_on_source_matrix)
@@ -168,13 +168,13 @@ def setup_runtime_data(data, input):
          data.workload_on_destination_matrix = np.array(workload_on_destination_matrix)
     else:
         data.workload_on_destination_matrix = np.array([[0 for _ in data.nodes] for _ in data.functions])
-    
+
     data.gpu_workload_on_destination_matrix = np.array([[0 for _ in data.gpu_nodes] for _ in data.gpu_functions])
 
     cores_matrix = input.get('cores_matrix', None)
     if cores_matrix:
         data.cores_matrix = cores_matrix
-    else: 
+    else:
         data.cores_matrix = np.array([[0 for _ in data.nodes] for _ in data.functions])
     data.response_time_matrix = [[0 for _ in data.nodes] for _ in data.functions]
     data.gpu_response_time_matrix = [[1 for _ in data.gpu_nodes] for _ in data.gpu_functions]
@@ -184,7 +184,7 @@ def setup_runtime_data(data, input):
 
 def setup_budget_data(data):
     data.node_costs = np.array([5 for _ in data.nodes])
-    data.node_budget = 30
+    data.node_budget = 300
 
 def create_mappings(data):
     data.node_map = {}
@@ -234,9 +234,8 @@ def update_data_from_db(data):
     print(f"RESPONSE TIME \n\n {rt_df}")
     print(f"DELAYS \n\n {dl_df}")
     print(f"CPU CONSUMPTION \n\n {cpu_df}")
-   
-    for node, func, response_time, gpu in zip(rt_df['destination'], rt_df['function'], rt_df['response_time'],
-                                              rt_df['gpu']):
+
+    for node, func, response_time, gpu in zip(rt_df['destination'], rt_df['function'], rt_df['response_time'], rt_df['gpu']):
         if gpu:
             data.gpu_response_time_matrix[data.gpu_func_map[func]][data.gpu_node_map[node]] = response_time
             pass
@@ -249,8 +248,7 @@ def update_data_from_db(data):
     for node, func, cores in zip(cpu_df['node'], cpu_df['function'], cpu_df['cores']):
         data.cores_matrix[data.func_map[func]][data.node_map[node]] = cores
 
-    for node, func, response_time, gpu in zip(ard_df['destination'], ard_df['function'], ard_df['arrival_rate'],
-                                              ard_df['gpu']):
+    for node, func, response_time, gpu in zip(ard_df['destination'], ard_df['function'], ard_df['arrival_rate'],ard_df['gpu']):
         if gpu:
             data.gpu_workload_on_destination_matrix[data.gpu_node_map[node]][data.gpu_func_map[func]] = response_time
             pass
@@ -277,12 +275,12 @@ def update_old_allocations(data):
     if data.old_cpu_allocations.sum() == 0:
         data.old_cpu_allocations = data.old_cpu_allocations + 1
 
-    print("CPU allocations:")
-    print(data.old_cpu_allocations)
+    #print("CPU allocations:")
+    #print(data.old_cpu_allocations)
 
     data.old_gpu_allocations = np.array(data.old_gpu_allocations, dtype=bool).astype(int)
     if data.old_gpu_allocations.sum() == 0:
         data.old_gpu_allocations = data.old_gpu_allocations + 1
 
-    print("GPU allocations:")
-    print(data.old_gpu_allocations)
+    #print("GPU allocations:")
+    #print(data.old_gpu_allocations)

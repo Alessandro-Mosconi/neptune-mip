@@ -47,7 +47,6 @@ def score_maximize_handled_requests(data, x):
 
 def score_minimize_node_utilization(data, n):
     return sum(1 for i in range(len(data.nodes)) if n[i]["val"])
-import numpy as np
 
 import numpy as np
 
