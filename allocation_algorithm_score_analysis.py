@@ -231,9 +231,9 @@ test_case_labels = {
     4: "4 - 1 nodo, 2 funzioni, entrambe allocate",
     5: "5 - molti nodi, molte funzioni, nessuna allocata",
     6: "6 - molti nodi, molte funzioni, tutte allocate",
-    7: "7 - 50 node, 20 functions",
-    7: "8 - 50 node, 5 functions",
-    7: "9 -  25 node, 20 functions"
+    7: "7 - 50 node, 15 functions",
+    8: "8 - 50 node, 5 functions",
+    9: "9 -  25 node, 15 functions"
 }
 
 

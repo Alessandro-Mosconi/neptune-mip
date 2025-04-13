@@ -310,7 +310,7 @@ for solver_type in [
             "actual_gpu_allocations": {
             }
         },
-        # 50 node, 20 functions
+        # 50 node, 15 functions
         # None of them were allocated
         {
             "case": 7,
@@ -326,9 +326,9 @@ for solver_type in [
             "node_cores": [100 for i in range(50)],
             "gpu_node_names": [],
             "gpu_node_memories": [],
-            "function_names": [f"ns/fn_{i}" for i in range(20)],
-            "function_memories": [30 for i in range(20)],
-            "function_max_delays": [100 for i in range(20)],
+            "function_names": [f"ns/fn_{i}" for i in range(15)],
+            "function_memories": [30 for i in range(15)],
+            "function_max_delays": [100 for i in range(15)],
             "gpu_function_names": [],
             "gpu_function_memories": [],
             "actual_cpu_allocations": {
@@ -362,7 +362,7 @@ for solver_type in [
             "actual_gpu_allocations": {
             }
         },
-        # 25 node, 20 functions
+        # 25 node, 15 functions
         # None of them were allocated
         {
             "case": 8,
@@ -378,9 +378,9 @@ for solver_type in [
             "node_cores": [100 for i in range(25)],
             "gpu_node_names": [],
             "gpu_node_memories": [],
-            "function_names": [f"ns/fn_{i}" for i in range(20)],
-            "function_memories": [30 for i in range(20)],
-            "function_max_delays": [100 for i in range(20)],
+            "function_names": [f"ns/fn_{i}" for i in range(15)],
+            "function_memories": [30 for i in range(15)],
+            "function_max_delays": [100 for i in range(15)],
             "gpu_function_names": [],
             "gpu_function_memories": [],
             "actual_cpu_allocations": {

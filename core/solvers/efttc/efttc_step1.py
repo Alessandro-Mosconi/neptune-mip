@@ -658,15 +658,19 @@ class EfttcStep1CPUMinDelayAndUtilization(EfttcStep1CPUMinUtilization):
         return score_minimize_node_delay_and_utilization(self.data, n, x, self.alpha)
 
     def score_local(self, f, j):
-        alloc_matrix = getattr(self.data, "old_allocations_matrix", None)
+        # Calcolo warm bonus (accesso diretto)
+        warm_bonus = 1.0
+        alloc_matrix = self.data.old_allocations_matrix
+        if alloc_matrix is not None and alloc_matrix[f, j] == 1:
+            warm_bonus = 0.5
 
-        if isinstance(alloc_matrix, np.ndarray):
-            if alloc_matrix[f, j] == 1:
-                warm_bonus = 0.5
-            else:
-                warm_bonus = 1.0
+        # Calcolo utilization per nodo j (evita chiamate inutili a len)
+        F = len(self.data.functions)
+        util = sum(self.c[(f2, j)]["val"] for f2 in range(F))
 
-        util = sum(self.c[(f2, j)]["val"] for f2 in range(len(self.data.functions)))
-        delay = self.data.node_delay_matrix[:, j].dot(self.data.workload_matrix[f])
-        return (self.alpha * util + (1 - self.alpha) * delay ) * warm_bonus
+        # Calcolo delay con NumPy (già efficiente)
+        delay = np.dot(self.data.node_delay_matrix[:, j], self.data.workload_matrix[f])
+
+        return (self.alpha * util + (1 - self.alpha) * delay) * warm_bonus
+
 

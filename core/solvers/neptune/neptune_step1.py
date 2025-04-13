@@ -20,8 +20,8 @@ class NeptuneStepBase(Solver):
 
     def results(self):
         x, c = output_x_and_c(self.data, self.x, self.c)
-        print("Step 1 - x:", x, sep='\n')
-        print("Step 1 - c:", c, sep='\n')
+        #print("Step 1 - x:", x, sep='\n')
+        #print("Step 1 - c:", c, sep='\n')
         self.data.prev_x = x
         self.data.prev_c = c 
         return x, c
@@ -56,7 +56,7 @@ class NeptuneStep1CPUMinUtilization(NeptuneStep1CPUBase):
         x, c = super().results()
         n = output_n(self.data, self.n)
         self.data.prev_n = n
-        print("Step 1 - n:", n, sep='\n')
+        #print("Step 1 - n:", n, sep='\n')
         return x, c
 
 
