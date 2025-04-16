@@ -437,6 +437,6 @@ class EfttcStep1CPUMinDelayAndUtilization(EfttcStep1CPUMinUtilization):
         # Calcolo delay con NumPy (già efficiente)
         delay = np.dot(self.data.node_delay_matrix[:, j], self.data.workload_matrix[f])
 
-        return (self.alpha * util + (1 - self.alpha) * delay) * warm_bonus
+        return (self.alpha * (self.data.node_costs[j] / (1 + util)) + (1 - self.alpha) * delay) * warm_bonus
 
 
