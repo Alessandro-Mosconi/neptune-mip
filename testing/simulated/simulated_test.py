@@ -5,7 +5,7 @@ import time
 
 import requests
 
-folder = "allocation_algorithm_test/"
+folder = "simulated_test/"
 
 for filename in os.listdir(folder):
     file_path = os.path.join(folder, filename)
@@ -17,21 +17,10 @@ for solver_type in [
     "EfttcMinDelay",
     "EfttcMinUtilization",
     "EfttcMinDelayAndUtilization",
-    #  "EFTTCMultiPathMinDelay",
-    #  "EFTTCMultiPathMinUtilization",
-    #  "EFTTCMultiPathMinDelayAndUtilization",
-    #"NeptuneWithEFTTCMinDelay",
-    #"NeptuneWithEFTTCMinUtilization",
-    #"NeptuneWithEFTTCMinDelayAndUtilization",
-    #"NeptuneMinDelayAndUtilization",
-    #"NeptuneMinDelay",
-    #"NeptuneMinUtilization",
-    #"VSVBP",
-    #"Criticality",
-    #"CriticalityHeuristic",
-    #"MCF"
+    "NeptuneMinDelayAndUtilization",
+    "NeptuneMinDelay",
+    "NeptuneMinUtilization",
 ]:
-    # solver_type = "NeptuneMinDelayAndUtilization"
 
     inputs = [
         # Simplest input
@@ -392,6 +381,9 @@ for solver_type in [
 
     for i, input_request in enumerate(inputs):
 
+        if i > 5:
+            continue
+
         start_time = time.time()
         response = requests.request(method='get', url="http://localhost:5000/", json=input_request)
         elapsed_time = time.time() - start_time
@@ -401,7 +393,7 @@ for solver_type in [
         print("Status:", response.status_code)
 
 
-        output_file = f"allocation_algorithm_test/output_{solver_type}_case{i}.json"
+        output_file = f"simulated_test/output_{solver_type}_case{i}.json"
 
         try:
             response_json = response.json()

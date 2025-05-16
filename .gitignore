@@ -199,4 +199,4 @@ pip-selfcheck.json
 
 build-and-test.sh
 
-allocation_algorithm_test/
+simulated_test/

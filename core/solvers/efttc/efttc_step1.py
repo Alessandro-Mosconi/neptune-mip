@@ -71,7 +71,7 @@ class EfttcStepBase(Solver):
             snapshot = self.snapshot_vars()
 
             print("✔️ Ciclo trovato, assegno")
-            hasSuccess = self.assign_cycle(cycle)
+            hasSuccess = self.can_assign_cycle(cycle)
 
             if not hasSuccess:
                 print("⛔️ Alcune assegnazioni non sono valide")
@@ -187,39 +187,6 @@ class EfttcStepBase(Solver):
             visited |= local_visited
         return []
 
-    def update_n_from_c(self):
-        if not hasattr(self, "n"):
-            return
-        for j in range(len(self.data.nodes)):
-            self.n[j]["val"] = any(
-                self.c[(f, j)]["val"]
-                for f in range(len(self.data.functions))
-            )
-
-    def update_x_from_c(self):
-        for f in range(len(self.data.functions)):
-            for i in range(len(self.data.nodes)):
-                # Trova tutti i nodi j dove la funzione f è attiva
-                active_nodes = [
-                    j for j in range(len(self.data.nodes))
-                    if self.c[(f, j)]["val"]
-                ]
-
-                if not active_nodes:
-                    continue
-
-                # Calcola il delay minimo per (i, f)
-                delays = {j: self.data.node_delay_matrix[i][j] for j in active_nodes}
-                min_delay = min(delays.values())
-
-                # Prende tutti i nodi j con delay minimo
-                best_nodes = [j for j, d in delays.items() if abs(d - min_delay) < 1e-6]
-
-                # Distribuisci in modo uniforme tra i best nodes
-                val = 1.0 / len(best_nodes)
-                for j in active_nodes:
-                    self.x[(i, f, j)]["val"] = val if j in best_nodes else 0.0
-
     def change_n_one(self, n, c, j):
         n[j]["val"] = any(
             c[(f, j)]["val"]
@@ -246,49 +213,81 @@ class EfttcStepBase(Solver):
 
     def find_best_node_by_delay_improvement(self, f, candidate_nodes, data, invalid_pairs):
         if not candidate_nodes:
+            print(f"🚫 Nessun nodo candidato per la funzione {f}")
             return None
 
-        # Step 0: Filtra nodi non validi o già usati
+        # Filtro nodi validi: non già assegnati e non invalidati
         useful_candidates = []
         for j in candidate_nodes:
             if self.c.get((f, j), {}).get("val", False):
+                #print(f"⚠️ Nodo {j} già ha la funzione {f}, lo salto")
                 continue
             if (f, j) in invalid_pairs:
+                #print(f"⚠️ Coppia (f={f}, j={j}) è negli invalid_pairs, la salto")
                 continue
             useful_candidates.append(j)
 
         if not useful_candidates:
+            print(f"❌ Nessun nodo utile rimasto per la funzione {f}")
             return None
 
-        # Step 1: Considera solo i nodi migliori per i nodi sorgente `i` con workload > 0
-        useful_nodes = set()
-        for i in range(len(data.nodes)):
-            if data.workload_matrix[f, i] > 0:
-                delays = data.node_delay_matrix[i]
-                min_delay = np.min(delays)
-                best_js = [j for j in useful_candidates if delays[j] == min_delay]
-                useful_nodes.update(best_js)
+        # Calcola vettore workload per la funzione f
+        workload_f = data.workload_matrix[f]  # shape (i,)
+        delay_matrix = data.node_delay_matrix  # shape (i, j)
 
-        if not useful_nodes:
-            return None
+        # Trova i nodi attivi (dove f è già assegnata)
+        active_nodes = [j2 for j2 in range(len(data.nodes)) if self.c.get((f, j2), {}).get("val", False)]
 
-        # Step 2: Calcolo vettoriale dei punteggi
-        useful_nodes = list(useful_nodes)
-        workload_f = data.workload_matrix[f]
-        delay_matrix = data.node_delay_matrix[:, useful_nodes]
-        scores = workload_f @ delay_matrix
+        # Calcola il delay attuale totale per la funzione f (weighted sum)
+        current_delay_vec = np.min(
+            delay_matrix[:, active_nodes], axis=1
+        ) if active_nodes else np.full(len(data.nodes), np.inf)
+        current_delay_score = np.sum(workload_f * current_delay_vec)
 
-        best_idx = np.argmin(scores)
-        best_score = scores[best_idx]
-        best_node = useful_nodes[best_idx]
+        #print(f"📊 Delay attuale della funzione {f}: {current_delay_score:.4f}")
 
-        if np.isclose(best_score, 0.0):
-            return None
+        best_node = None
+        best_delta_score = 0.0
 
-        print("🧠 Nodo migliore per f=", f, "→", best_node, "con score delay:", best_score)
-        return best_node
+        for j in useful_candidates:
+            #print(f"🔍 Valuto il nodo {j} per la funzione {f}")
 
-    def assign_cycle(self, cycle):
+            # Calcolo nuovo vettore di delay se assegnassi f anche su j
+            delay_vec_candidate = delay_matrix[:, j]
+            new_delay_vec = np.minimum(current_delay_vec, delay_vec_candidate)
+            new_delay_score = np.sum(workload_f * new_delay_vec)
+            delta_delay = current_delay_score - new_delay_score
+
+            #print(f"  ⏱️  Delta delay con nodo {j}: {delta_delay:.4f}")
+
+            if self.objective == 'min_delay':
+                if delta_delay > best_delta_score + 1e-6:
+                    print(f"  ✅ Nodo {j} migliora il delay rispetto a precedente best (score: {delta_delay:.4f})")
+                    best_delta_score = delta_delay
+                    best_node = j
+
+            elif self.objective == 'min_delay_min_utilization':
+                alpha = getattr(data, "alpha", 0.5)
+                node_active = self.n.get(j, {"val": False})["val"]
+                delta_utilization = (1 / len(data.nodes)) if not node_active else 0
+                delta_score = (1 - alpha) * delta_delay - alpha * delta_utilization
+
+                #print(f"  🧮 Delta utilization: {delta_utilization:.4f}")
+                #print(f"  🎯 Delta score combinato: {delta_score:.4f}")
+
+                if delta_score > best_delta_score + 1e-6:
+                    #print(f"  ✅ Nodo {j} migliora il punteggio combinato rispetto a precedente best (score: {delta_score:.4f})")
+                    best_delta_score = delta_score
+                    best_node = j
+
+        if best_node is not None:
+            print(f"🧠 Nodo migliore per f={f} → {best_node} con miglioramento ≈ {best_delta_score:.4f}")
+            return best_node
+
+        print(f"❌ Nessun nodo porta miglioramento utile per la funzione {f}")
+        return None
+
+    def can_assign_cycle(self, cycle):
         success = False  # flag per tracciare se almeno un'assegnazione è andata a buon fine
         for f, j in cycle:
             if isinstance(f, int) and isinstance(j, int):
@@ -404,7 +403,7 @@ class EfttcStep1CPUMinDelay(EfttcStep1CPUBase):
 
         if isinstance(alloc_matrix, np.ndarray):
             if alloc_matrix[f, j] == 1:
-                warm_bonus = 0.01
+                warm_bonus = 0.5
             else:
                 warm_bonus = 1.0
 

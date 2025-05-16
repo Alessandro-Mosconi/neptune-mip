@@ -1,27 +1,27 @@
 import os
 import json
+from pathlib import Path
+
 import pandas as pd
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-
-# Crea PDF
-
 from core.solvers.efttc.utils.objectives import (
     score_minimize_node_delay_and_utilization,
     score_minimize_network_delay,
     score_minimize_node_utilization
 )
-
 from core.solvers.efttc.utils.constraints_step1 import *
 from core.utils.input_to_data import data_to_solver_input
 
 # 📁 Percorso alla cartella dei JSON
-directory = "/home/alessandromosconi/Desktop/fork/neptune-mip/allocation_algorithm_test"
+base_dir = Path(__file__).resolve().parent
+
+directory = base_dir / "simulated_test"
+out_dir = base_dir / "result_simulated"
 results = []
 alloc_matrix = {}
 
 # 🔁 Ricostruzione c, n, x da JSON e solver_input
-
 def recreate_all_vars_from_json(data):
     cpu_allocations = data.get("cpu_allocations", {})
     cpu_routing_rules = data.get("cpu_routing_rules", {})
@@ -73,7 +73,6 @@ def recreate_all_vars_from_json(data):
 
     return c, n, x, functions, nodes, solver_input
 
-
 def add_table_to_ax(ax, df, title):
     ax.axis('off')
     table = ax.table(cellText=df.values, colLabels=df.columns, cellLoc='center', loc='center')
@@ -83,68 +82,204 @@ def add_table_to_ax(ax, df, title):
     ax.set_title(title, fontweight="bold", fontsize=10, loc='left')
 
 def plot_single_suffix_page(pdf, suffix, subset, test_case_labels, score_column):
-    # Prepara i pivot
-    pivot_time = subset.pivot(index="test_case", columns="method", values="processing_time").sort_index(axis=1).reset_index()
-    pivot_score = subset.pivot(index="test_case", columns="method", values=score_column).sort_index(axis=1).reset_index()
+    # Prepare pivots
+    pivot_time = (
+        subset
+        .pivot(index="test_case", columns="method", values="processing_time")
+        .sort_index(axis=1)
+        .reset_index()
+    )
+    pivot_score = (
+        subset
+        .pivot(index="test_case", columns="method", values=score_column)
+        .sort_index(axis=1)
+        .reset_index()
+    )
 
-    # 🔁 Stampa anche a schermo
-    print(f"\n[📊] Tabella tempi (ms) - Metodo {suffix}")
+    # Print to console
+    print(f"\n[Processing Time Table (ms)] Method {suffix}")
     print(pivot_time.to_string(index=False))
-
-    print(f"\n[📊] Tabella score - Metodo {suffix}")
+    print(f"\n[Score Table] Method {suffix}")
     print(pivot_score.to_string(index=False))
 
+    # Combined figure
     fig, axes = plt.subplots(3, 2, figsize=(15, 14))
-    fig.suptitle(f"📄 Report Metodo {suffix}", fontsize=16, fontweight='bold')
+    fig.suptitle(f"Method {suffix} Report", fontsize=16, fontweight='bold')
 
-    # Tempi - Lineare
+    # Common bar_label options
+    bar_label_opts = dict(
+        rotation=90,
+        padding=3,
+        fontsize=7,
+        label_type='edge'
+    )
+
+    # 1) Processing Time – Linear
     ax = axes[0, 0]
-    pivot_time.set_index("test_case").plot(kind="bar", ax=ax, log=False, legend=False)
-    ax.set_title("Tempo di elaborazione (ms)")
+    pivot_time.set_index("test_case").plot(
+        kind="bar", ax=ax, log=False, legend=False, width=0.8
+    )
+    ax.set_title("Processing Time (ms)")
+    ax.set_xlabel("")
     ax.set_xticks(range(len(pivot_time["test_case"])))
-    ax.set_xticklabels([test_case_labels.get(tc, str(tc)) for tc in pivot_time["test_case"]], rotation=45, ha='right')
-    for c in ax.containers:
-        ax.bar_label(c, fmt="%.1f", fontsize=7)
+    ax.set_xticklabels(
+        [test_case_labels.get(tc, str(tc)) for tc in pivot_time["test_case"]],
+        rotation=45, ha='right'
+    )
+    ax.set_ylim(top=ax.get_ylim()[1] * 1.3)
+    for cont in ax.containers:
+        ax.bar_label(cont, fmt="%.1f", **bar_label_opts)
 
-    # Tempi - Log
+    # 2) Processing Time – Log
     ax = axes[0, 1]
-    pivot_time.set_index("test_case").plot(kind="bar", ax=ax, log=True, legend=True)
-    ax.set_title("Tempo di elaborazione (ms) [log]")
+    pivot_time.set_index("test_case").plot(
+        kind="bar", ax=ax, log=True, legend=True, width=0.8
+    )
+    ax.set_title("Processing Time (ms) [log]")
+    ax.set_xlabel("")
     ax.set_xticks(range(len(pivot_time["test_case"])))
-    ax.set_xticklabels([test_case_labels.get(tc, str(tc)) for tc in pivot_time["test_case"]], rotation=45, ha='right')
-    for c in ax.containers:
-        ax.bar_label(c, fmt="%.1f", fontsize=7)
+    ax.set_xticklabels(
+        [test_case_labels.get(tc, str(tc)) for tc in pivot_time["test_case"]],
+        rotation=45, ha='right'
+    )
+    for cont in ax.containers:
+        ax.bar_label(cont, fmt="%.1f", **bar_label_opts)
 
-    # Score - Lineare
+    # 3) Score – Linear
     ax = axes[1, 0]
-    pivot_score.set_index("test_case").plot(kind="bar", ax=ax, log=False, legend=False)
+    pivot_score.set_index("test_case").plot(
+        kind="bar", ax=ax, log=False, legend=False, width=0.8
+    )
     ax.set_title("Score")
+    ax.set_xlabel("")
     ax.set_xticks(range(len(pivot_score["test_case"])))
-    ax.set_xticklabels([test_case_labels.get(tc, str(tc)) for tc in pivot_score["test_case"]], rotation=45, ha='right')
-    for c in ax.containers:
-        ax.bar_label(c, fmt="%.2f", fontsize=7)
+    ax.set_xticklabels(
+        [test_case_labels.get(tc, str(tc)) for tc in pivot_score["test_case"]],
+        rotation=45, ha='right'
+    )
+    ax.set_ylim(top=ax.get_ylim()[1] * 1.3)
+    for cont in ax.containers:
+        ax.bar_label(cont, fmt="%.2f", **bar_label_opts)
 
-    # Score - Log
+    # 4) Score – Log
     ax = axes[1, 1]
-    pivot_score.set_index("test_case").plot(kind="bar", ax=ax, log=True, legend=True)
+    pivot_score.set_index("test_case").plot(
+        kind="bar", ax=ax, log=True, legend=True, width=0.8
+    )
     ax.set_title("Score [log]")
+    ax.set_xlabel("")
     ax.set_xticks(range(len(pivot_score["test_case"])))
-    ax.set_xticklabels([test_case_labels.get(tc, str(tc)) for tc in pivot_score["test_case"]], rotation=45, ha='right')
-    for c in ax.containers:
-        ax.bar_label(c, fmt="%.2f", fontsize=7)
+    ax.set_xticklabels(
+        [test_case_labels.get(tc, str(tc)) for tc in pivot_score["test_case"]],
+        rotation=45, ha='right'
+    )
+    for cont in ax.containers:
+        ax.bar_label(cont, fmt="%.2f", **bar_label_opts)
 
-    # Tabelle come immagini
-    add_table_to_ax(axes[2, 0], pivot_time, "Tabella tempi (ms)")
-    add_table_to_ax(axes[2, 1], pivot_score, "Tabella score")
+    # 5+6) Tables
+    add_table_to_ax(axes[2, 0], pivot_time, "Processing Time Table (ms)")
+    add_table_to_ax(axes[2, 1], pivot_score, "Score Table")
 
     fig.tight_layout(rect=[0, 0, 1, 0.95])
-    pdf.savefig(fig)  # Salva nel PDF
-    plt.show()  # Mostra sullo schermo
-    plt.close(fig)  # Chiude la figura
+
+    # 1) Save combined figure to PDF
+    pdf.savefig(fig)
+
+    # 2) Save each of the 4 main plots as standalone PNGs
+    os.makedirs(out_dir, exist_ok=True)
+
+    def save_single(df, title, is_log, fname):
+        if "score_log" in fname:
+            return
+
+        fig, ax = plt.subplots(figsize=(9, 6))
+
+        # Plot + legenda
+        df.plot(kind="bar", ax=ax, log=is_log, legend=True, width=0.8)
+
+        # Titolo e xticks
+        ax.set_title(title)
+        ax.set_xlabel("")
+        ax.set_xticks(range(len(df.index)))
+        ax.set_xticklabels(
+            [test_case_labels.get(tc, str(tc)) for tc in df.index],
+            rotation=45, ha="right"
+        )
+
+        # Sposta la legenda fuori a destra
+        ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1), borderaxespad=0)
+        fig.subplots_adjust(right=0.75)
+
+        # ETICHETTE: se log, forzo a usare i valori raw di df
+        fmt = "%.1f" if "Processing" in title else "%.2f"
+        for cont, col in zip(ax.containers, df.columns):
+            if is_log:
+                # qui prendo la colonna originale e formatto io
+                raw = df[col].tolist()
+                labels = [fmt % v for v in raw]
+                ax.bar_label(
+                    cont,
+                    labels=labels,
+                    rotation=90,
+                    padding=3,
+                    fontsize=8,
+                    label_type="edge",
+                    clip_on=False
+                )
+            else:
+                # comportamento standard
+                ax.bar_label(
+                    cont,
+                    fmt=fmt,
+                    rotation=90,
+                    padding=3,
+                    fontsize=8,
+                    label_type="edge",
+                    clip_on=False
+                )
+
+        # Allunga ylim (come prima)
+        ymin, ymax = ax.get_ylim()
+        scale = ((10 if "time_log" in fname else 5) if is_log else 1.2)
+        ax.set_ylim(ymin, ymax * scale)
+
+        # Layout e salvataggio
+        fig.tight_layout()
+        fig.subplots_adjust(top=0.9)
+        fig.savefig(os.path.join(out_dir, "simulated_" + fname), dpi=300)
+        plt.close(fig)
+
+    save_single(
+        pivot_time.set_index("test_case"),
+        "Processing Time (ms)",
+        False,
+        f"{suffix}_processing_time_linear.png"
+    )
+    save_single(
+        pivot_time.set_index("test_case"),
+        "Processing Time (ms) [log]",
+        True,
+        f"{suffix}_processing_time_log.png"
+    )
+    save_single(
+        pivot_score.set_index("test_case"),
+        "Score",
+        False,
+        f"{suffix}_score_linear.png"
+    )
+    save_single(
+        pivot_score.set_index("test_case"),
+        "Score [log]",
+        True,
+        f"{suffix}_score_log.png"
+    )
+
+    plt.show()
+    plt.close(fig)
 
 # 🔍 Estrazione dati dai file JSON
 for file in os.listdir(directory):
-    if file.startswith("output_") and file.endswith(".json"):
+    if file.startswith("output_") and file.endswith(".json") and "WithEFTTC" not in file:
         method = file.split("_")[1]
         test_case = int(file.split("case")[-1].split(".")[0])
         path = os.path.join(directory, file)
@@ -224,18 +359,17 @@ df["response_time"] *= 1000
 
 # Etichette test_case
 test_case_labels = {
-    0: "0 - 1 nodo, 1 funzione, non allocata",
-    1: "1 - 1 nodo, 1 funzione, già allocata",
-    2: "2 - 1 nodo, 2 funzioni, non allocate",
-    3: "3 - 1 nodo, 2 funzioni, una allocata",
-    4: "4 - 1 nodo, 2 funzioni, entrambe allocate",
-    5: "5 - molti nodi, molte funzioni, nessuna allocata",
-    6: "6 - molti nodi, molte funzioni, tutte allocate",
-    7: "7 - 50 node, 15 functions",
-    8: "8 - 50 node, 5 functions",
-    9: "9 -  25 node, 15 functions"
+    0: "1 node, 1 function (not allocated)",
+    1: "1 node, 1 function (already allocated)",
+    2: "1 node, 2 functions (none allocated)",
+    3: "1 node, 2 functions (one allocated)",
+    4: "1 node, 2 functions (both allocated)",
+    5: "20 nodes, 5 functions (none allocated)",
+    6: "20 nodes, 5 functions (all allocated)",
+    7: "50 nodes, 15 functions (none allocated)",
+    8: "50 nodes, 5 functions (none allocated)",
+    9: "25 nodes, 15 functions (none allocated)"
 }
-
 
 
 # Score columns
@@ -246,7 +380,7 @@ score_column_map = {
 }
 
 # Unico ciclo per mostrare tempi e score
-with PdfPages("report_finale.pdf") as pdf:
+with PdfPages("simulated_report_finale.pdf") as pdf:
     for suffix in ["MinDelay", "MinDelayAndUtilization", "MinUtilization"]:
         print(f"\n📄 Generazione pagina PDF - Metodo {suffix}")
 

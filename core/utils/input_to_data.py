@@ -160,8 +160,8 @@ def setup_runtime_data(data, input):
     if workload_on_source_matrix:
          data.workload_on_source_matrix = np.array(workload_on_source_matrix)
     else:
-        setup_custom_workload_on_source(data)
-        #data.workload_on_source_matrix = np.array([[0 for _ in data.nodes] for _ in data.functions])
+        #setup_custom_workload_on_source(data)
+        data.workload_on_source_matrix = np.array([[0 for _ in data.nodes] for _ in data.functions])
 
     workload_on_destination_matrix = input.get('workload_on_destination_matrix', None)
     if workload_on_destination_matrix:

@@ -1,4 +1,6 @@
-from .efttc_step2 import *
+from core.solvers.efttc.efttc_step1 import *
+from core.solvers.efttc.utils import *
+
 
 class EfttcBase(Solver):
     def __init__(self, step1=None, step2_delete=None, step2_create=None, **kwargs):
@@ -6,7 +8,6 @@ class EfttcBase(Solver):
         self.step1 = step1
         self.step2_delete = step2_delete
         self.step2_create = step2_create
-        self.solved = False
 
     def init_vars(self): pass
     def init_constraints(self): pass
@@ -17,31 +18,18 @@ class EfttcBase(Solver):
         self.step1_x, self.step1_c = self.step1.results()
         self.data.max_score = self.step1.score()
         self.step2_x, self.step2_c = self.step1_x, self.step1_c
-        self.solved = False
-        #self.step2_delete.load_data(self.data)
-        #self.solved = self.step2_delete_solved = self.step2_delete.solve()
-        #self.step2_x, self.step2_c = self.step2_delete.results()
-        #if not self.solved:
-        #   self.step2_create.load_data(self.data)
-        #   self.solved = self.step2_create.solve()
-        #   self.step2_x, self.step2_c = self.step2_create.results()
-        return self.solved
+        return False
     
-    def results(self): 
-        if self.solved:
-            return convert_x_matrix(self.step2_x, self.data.nodes, self.data.functions), convert_c_matrix(self.step2_c, self.data.functions, self.data.nodes)
-        else:
-            return convert_x_matrix(self.step1_x, self.data.nodes, self.data.functions), convert_c_matrix(self.step1_c, self.data.functions, self.data.nodes)
+    def results(self):
+        return convert_x_matrix(self.step1_x, self.data.nodes, self.data.functions), convert_c_matrix(self.step1_c, self.data.functions, self.data.nodes)
 
     def score(self):
-        return { "step1": self.step1.score(), "step2": -1 } #self.step2_delete.score() if self.step2_delete_solved else self.step2_create.score() }
+        return { "step1": self.step1.score(), "step2": -1 }
 
 class EfttcMinDelayAndUtilization(EfttcBase):
     def __init__(self, **kwargs):
         super().__init__(
             EfttcStep1CPUMinDelayAndUtilization(**kwargs),
-            EfttcStep2MinDelayAndUtilization(mode="delete", **kwargs),
-            EfttcStep2MinDelayAndUtilization(mode="create", **kwargs),
             **kwargs
             )
 
@@ -49,8 +37,6 @@ class EfttcMinDelay(EfttcBase):
     def __init__(self, **kwargs):
         super().__init__(
             EfttcStep1CPUMinDelay(**kwargs),
-            EfttcStep2MinDelay(mode="delete", **kwargs),
-            EfttcStep2MinDelay(mode="create", **kwargs),
             **kwargs
             )
 
@@ -58,7 +44,5 @@ class EfttcMinUtilization(EfttcBase):
     def __init__(self, **kwargs):
         super().__init__(
             EfttcStep1CPUMinUtilization(**kwargs),
-            EfttcStep2MinUtilization(mode="delete", **kwargs),
-            EfttcStep2MinUtilization(mode="create", **kwargs),
             **kwargs
             )
